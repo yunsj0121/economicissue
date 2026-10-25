@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from .sources import request
 from .editorial import TITLE_STYLES
@@ -16,6 +17,9 @@ RULES = """한국어 네이버 경제 이슈 글 편집자. 독자는 3040이다
 긴 문장은 자연스럽게 짧은 문장들로 고쳐 쓴다. 2~3문장마다 문단을 나누고 문단 사이는 빈 줄.
 문장 끝 마침표(.)는 쓰지 않는다. 소수점·주소의 점은 유지. 자연스러운 ~요/~습니다.
 불필요한 인사·반복·분량 채우기 금지.
+hashtags에는 글의 실제 주제와 관련된 해시태그를 정확히 20개 작성한다.
+각 태그는 #으로 시작하고 한글·영문·숫자·밑줄만 사용한다. 공백·중복·무관한 인기 키워드 금지.
+해시태그는 본문 문단에 섞지 않고 hashtags 배열에만 넣는다. 출력 시 자료 출처 뒤 원고 맨 마지막에 붙인다.
 2000자는 참고일 뿐 최소 길이 없음. 소제목은 필요할 때만. 실제 체험을 지어내지 않는다.
 평균/중앙값, 개인/가구, 저축/투자, 기준연도/발표일을 구분한다.
 일화는 작성자의 주장으로 표시하고 집단 전체로 일반화하지 않는다. 전망은 조건을 밝힌다.
@@ -65,6 +69,7 @@ SCHEMA = obj({
     "cards": {"type": "array", "items": obj({"title": S, "text": S,
         "source_ids": IDS, "after": {"type": "integer"}})},
     "warnings": IDS,
+    "hashtags": {"type": "array", "minItems": 20, "maxItems": 20, "items": S},
     "editorial": obj({"situation": S, "question": S, "source_ids": IDS, "reason": S,
         "title_candidates": {"type": "array", "minItems": 3, "maxItems": 3,
             "items": obj({"style": {"type": "string", "enum": list(TITLE_STYLES)}, "title": S})}})
@@ -75,6 +80,11 @@ def validate(post, sources, image_count):
     if not post.get("ready"):
         raise ValueError("자료 부족: " + post.get("reason", ""))
     ids = {s["id"] for s in sources}
+    tags = post.get("hashtags")
+    if (not isinstance(tags, list) or len(tags) != 20
+            or any(not isinstance(t, str) or not re.fullmatch(r"#\w+", t) for t in tags)
+            or len({t.casefold() for t in tags}) != 20):
+        raise ValueError("주제 관련 해시태그를 #으로 시작하는 중복 없는 20개 배열로 작성하세요")
     if not post["title"].strip() or not post["topic_key"].strip() or not post["paragraphs"]:
         raise ValueError("제목·주제·본문 누락")
     # Keep older manually authored drafts buildable; generated drafts use the strict schema.

@@ -146,6 +146,7 @@ def finish(result, brief, policy, captures):
                 if card["after"] == number:
                     lines.extend([f"[이미지 {i:02d}_body.png]", ""])
         lines += ["자료 출처", ""] + [f"{s['id']}: {s['title']}\n{s['url']}" for s in cited]
+        lines += ["", " ".join(post["hashtags"])]
         (staging / "post.txt").write_text("\n".join(lines), encoding="utf-8")
         write(staging / "review.json", {"characters_with_spaces": len(body),
               "warnings": post["warnings"], "usage": result.get("usage", {}),

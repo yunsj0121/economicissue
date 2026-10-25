@@ -17,6 +17,7 @@ def fixture():
                 "text": "테스트에만 사용하는 내용", "hash": "abc", "published": "2026-01-01"}]
     post = {"ready": True, "reason": "", "topic_key": "fixture-2026", "title": "생활비를 살펴볼 때",
             "thumbnail": "생활비 점검\n어디부터 할까?", "warnings": [],
+            "hashtags": [f"#생활비{i}" for i in range(20)],
             "paragraphs": [{"kind": "fact", "text": "테스트를 위한 사실 문단입니다.", "source_ids": ["s1"]},
                            {"kind": "opinion", "text": "조건을 살펴볼 필요가 있겠습니다.", "source_ids": []}],
             "cards": [{"title": "기준 확인", "text": "조사 대상을 먼저 확인합니다.", "source_ids": ["s1"], "after": 1},
@@ -88,6 +89,8 @@ class PipelineTests(unittest.TestCase):
                 self.assertIn("[이미지 02_body.png]", text)
                 self.assertIn("테스트를 위한 사실 문단입니다\n", text)
                 self.assertNotIn("사실 문단입니다.", text)
+                self.assertEqual(text.splitlines()[-1].split(), post["hashtags"])
+                self.assertLess(text.index("자료 출처"), text.index("#생활비0"))
                 with self.assertRaises(ValueError):
                     finish({"post": post}, {"sources": sources}, policy, [])
             finally:

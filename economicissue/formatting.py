@@ -3,7 +3,7 @@ import copy
 import re
 
 
-def mobile_text(text):
+def mobile_text(text, sentence_spacing=False):
     # Protect URLs and decimal points while separating sentence boundaries.
     urls = []
     def protect(match):
@@ -23,6 +23,10 @@ def mobile_text(text):
         # Device layout handles visual wrapping; never insert a break by length.
         # Keeping empty lines also preserves the author's paragraph spacing.
         lines.append(line)
+    if sentence_spacing:
+        # Each prose line is a complete sentence. Collapse any existing gaps so
+        # repeated formatting always leaves exactly one blank line between them.
+        return "\n\n".join(line for line in lines if line).strip()
     return "\n".join(lines).strip()
 
 
@@ -33,7 +37,7 @@ def format_post(post):
         choice["title"] = choice["title"].strip().rstrip(".．。")
     post["thumbnail"] = mobile_text(post["thumbnail"])
     for paragraph in post["paragraphs"]:
-        paragraph["text"] = mobile_text(paragraph["text"])
+        paragraph["text"] = mobile_text(paragraph["text"], sentence_spacing=True)
     for card in post["cards"]:
         card["title"] = card["title"].strip().rstrip(".．。")
         card["text"] = mobile_text(card["text"])

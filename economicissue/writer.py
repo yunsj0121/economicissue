@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from .sources import request
 from .editorial import TITLE_STYLES
@@ -13,9 +14,12 @@ RULES = """한국어 네이버 경제 이슈 글 편집자. 독자는 3040이다
 본문에서 답할 수 있는 궁금증을 담은 최종 제목 1개. 가짜 인용, 과장, 범위 왜곡, 근거 없는 숫자 금지.
 전개: 익숙한 생활 상황→자료/사연→숫자 풀이→해석→독자에게 남길 생각.
 완성된 한 문장을 한 줄에 쓴다. 문장 내부에는 길이나 의미 단위를 이유로 줄바꿈하지 않는다.
-긴 문장은 자연스럽게 짧은 문장들로 고쳐 쓴다. 2~3문장마다 문단을 나누고 문단 사이는 빈 줄.
+긴 문장은 자연스럽게 짧은 문장들로 고쳐 쓴다. 모든 문장 사이에 빈 줄을 정확히 하나씩 넣는다.
 문장 끝 마침표(.)는 쓰지 않는다. 소수점·주소의 점은 유지. 자연스러운 ~요/~습니다.
 불필요한 인사·반복·분량 채우기 금지.
+hashtags에는 글의 실제 주제와 관련된 해시태그를 정확히 20개 작성한다.
+각 태그는 #으로 시작하고 한글·영문·숫자·밑줄만 사용한다. 공백·중복·무관한 인기 키워드 금지.
+해시태그는 본문 문단에 섞지 않고 hashtags 배열에만 넣는다. 출력 시 자료 출처 뒤 원고 맨 마지막에 붙인다.
 2000자는 참고일 뿐 최소 길이 없음. 소제목은 필요할 때만. 실제 체험을 지어내지 않는다.
 평균/중앙값, 개인/가구, 저축/투자, 기준연도/발표일을 구분한다.
 일화는 작성자의 주장으로 표시하고 집단 전체로 일반화하지 않는다. 전망은 조건을 밝힌다.
@@ -26,6 +30,7 @@ community 자료는 익명 주장일 뿐 사실로 확정하지 않는다. 날�
 cards는 썸네일 제외 2~3장. 각 카드는 관련 문단 after 뒤에 넣는다(문단 번호 1부터).
 카드 제목 24자 이내, 본문 140자 이내. 서로 다른 정보를 주며 근거 없는 수치 금지.
 thumbnail은 3줄 이하, 줄당 14자 이하. sources에 없는 주소·이미지 URL은 만들지 않는다.
+썸네일과 모든 자료사진은 1:1 정사각형(1080×1080) 기준이다. 원문은 비율을 유지하고 여백으로 맞추며 글자·표·밑줄을 자르지 않는다.
 topic_key는 사건/보고서 고유 식별자(기관-발표시기-주제). warnings에 독자가 확인할 한계를 적는다.
 """
 
@@ -65,6 +70,7 @@ SCHEMA = obj({
     "cards": {"type": "array", "items": obj({"title": S, "text": S,
         "source_ids": IDS, "after": {"type": "integer"}})},
     "warnings": IDS,
+    "hashtags": {"type": "array", "minItems": 20, "maxItems": 20, "items": S},
     "editorial": obj({"situation": S, "question": S, "source_ids": IDS, "reason": S,
         "title_candidates": {"type": "array", "minItems": 3, "maxItems": 3,
             "items": obj({"style": {"type": "string", "enum": list(TITLE_STYLES)}, "title": S})}})
@@ -75,6 +81,11 @@ def validate(post, sources, image_count):
     if not post.get("ready"):
         raise ValueError("자료 부족: " + post.get("reason", ""))
     ids = {s["id"] for s in sources}
+    tags = post.get("hashtags")
+    if (not isinstance(tags, list) or len(tags) != 20
+            or any(not isinstance(t, str) or not re.fullmatch(r"#\w+", t) for t in tags)
+            or len({t.casefold() for t in tags}) != 20):
+        raise ValueError("주제 관련 해시태그를 #으로 시작하는 중복 없는 20개 배열로 작성하세요")
     if not post["title"].strip() or not post["topic_key"].strip() or not post["paragraphs"]:
         raise ValueError("제목·주제·본문 누락")
     # Keep older manually authored drafts buildable; generated drafts use the strict schema.

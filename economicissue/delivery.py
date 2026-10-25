@@ -2,14 +2,17 @@
 import html
 import json
 from pathlib import Path
+from .images import IMAGE_SIZE, square_image
 
 
 def write_delivery(directory, title, files):
     directory = Path(directory)
+    for name in files:
+        square_image(directory / name)
     # The consumer must attach these files as one native image gallery in chat.
     # An HTML file or manifest alone cannot control the ChatGPT client renderer.
     delivery = {"version": 1, "presentation": "native_multi_image_gallery",
-                "final_only": True, "order": files,
+                "final_only": True, "order": files, "aspect_ratio": "1:1", "image_size": list(IMAGE_SIZE),
                 "images": [{"path": name, "role": "thumbnail" if i == 0 else "body",
                             "alt_text": None} for i, name in enumerate(files)],
                 "alt_text_author": "user", "post": "post.txt",

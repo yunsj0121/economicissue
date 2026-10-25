@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .sources import public_url
+from .images import IMAGE_SIZE, square_image
 
 
 def font_path():
@@ -29,7 +30,7 @@ def wrap(text, font, width):
 
 
 def draw_image(path, title, text, footer, thumbnail=False, background=None):
-    image = Image.new("RGB", (1080, 1080), "#142d35" if thumbnail else "#f5f3ed")
+    image = Image.new("RGB", IMAGE_SIZE, "#142d35" if thumbnail else "#f5f3ed")
     if background:
         with Image.open(background) as original:
             image = ImageOps.fit(original.convert("RGB"), (1080, 1080))
@@ -183,5 +184,7 @@ def render(post, sources, directory, captures=()):
             footer = " · ".join(sid + " " + urlsplit(known[sid]["url"]).netloc for sid in card["source_ids"])
             draw_image(directory / filename, card["title"], card["text"], footer)
         files.append(filename)
+    for filename in files:
+        square_image(directory / filename)
     return files
 

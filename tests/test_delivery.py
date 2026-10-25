@@ -36,6 +36,16 @@ class DeliveryTests(unittest.TestCase):
         self.assertFalse(formatted['paragraphs'][0]['text'].endswith('.'))
         self.assertEqual(format_post(formatted), formatted)
 
+    def test_every_prose_sentence_gets_exactly_one_blank_line(self):
+        post, _ = fixture()
+        post['paragraphs'][0]['text'] = '첫 문장입니다. 둘째 문장입니다.\n셋째 문장입니다\n\n\n넷째 문장입니다'
+        formatted = format_post(post)
+        self.assertEqual(formatted['paragraphs'][0]['text'],
+                         '첫 문장입니다\n\n둘째 문장입니다\n\n셋째 문장입니다\n\n넷째 문장입니다')
+        self.assertEqual(formatted['thumbnail'], post['thumbnail'])
+        self.assertEqual(formatted['cards'][0]['text'], '조사 대상을 먼저 확인합니다')
+        self.assertEqual(format_post(formatted), formatted)
+
     def test_body_capture_requires_highlights_before_browser(self):
         with self.assertRaisesRegex(ValueError, 'highlights'):
             capture_source({'card': 2, 'selector': '#body', 'rights': 'fixture'},

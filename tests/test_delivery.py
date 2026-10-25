@@ -16,7 +16,18 @@ class DeliveryTests(unittest.TestCase):
                          '연 3.5%입니다\n다음 문장입니다\n어떤 차이일까요?\n확인합니다')
         self.assertEqual(mobile_text('주소 https://example.com/a.b?q=3.5. 다음 문장.'),
                          '주소 https://example.com/a.b?q=3.5\n다음 문장')
-        self.assertTrue(all(len(line) <= 32 for line in mobile_text('가' * 70).splitlines()))
+        self.assertEqual(mobile_text('가' * 70), '가' * 70)
+
+    def test_complete_sentences_and_paragraph_spacing_survive_formatting(self):
+        sentence = '퇴직하고 월급은 끊겼는데 국민연금을 받기까지 몇 년이 남았다면 연금을 조금 일찍 받고 싶어질 수 있어요'
+        text = sentence + '.\n\n월 수령액과 누적 수령액은 함께 비교해야 해요.'
+        expected = sentence + '\n\n월 수령액과 누적 수령액은 함께 비교해야 해요'
+        self.assertEqual(mobile_text(text), expected)
+        post, _ = fixture()
+        post['paragraphs'][0]['text'] = text
+        formatted = format_post(post)
+        self.assertEqual(formatted['paragraphs'][0]['text'], expected)
+        self.assertEqual(formatted['thumbnail'], post['thumbnail'])
 
     def test_format_is_idempotent_without_mutating_draft(self):
         post, _ = fixture()

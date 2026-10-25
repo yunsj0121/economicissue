@@ -67,6 +67,11 @@ def capture_source(spec, source, path):
     # Screenshots require a concrete usage basis supplied by the operator.
     if not spec.get("rights", "").strip() or not spec.get("selector"):
         raise ValueError("캡처에는 이용 근거와 정확한 CSS selector가 필요합니다")
+    highlights = spec.get("highlights", [])
+    if not isinstance(highlights, list) or any(not isinstance(t, str) or not t.strip() for t in highlights):
+        raise ValueError("highlights는 원문의 핵심 문장 문자열 목록이어야 합니다")
+    if spec.get("card") != 1 and not highlights:
+        raise ValueError("본문 캡처에는 빨간 밑줄을 표시할 핵심 문장 highlights가 필요합니다")
     public_url(source["url"])
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -87,11 +92,65 @@ def capture_source(spec, source, path):
         target = page.locator(spec["selector"])
         if target.count() != 1:
             raise ValueError("캡처 대상이 하나로 특정되지 않습니다")
+        target.scroll_into_view_if_needed()
         box = target.bounding_box()
         if not box or box["height"] > 1800 or box["width"] < 300:
             raise ValueError("캡처 크기를 읽기 쉽게 좁혀 주세요")
-        target.screenshot(path=str(path))
+        rectangles = target.evaluate(HIGHLIGHT_RECTS, highlights) if highlights else []
+        target.screenshot(path=str(path), animations="disabled")
+        if rectangles:
+            underline_capture(path, rectangles, box["width"], box["height"])
         browser.close()
+
+
+# Locate exact visible source text, including text split across inline elements.
+# Returning rectangles avoids changing the original page's text or layout.
+HIGHLIGHT_RECTS = r"""(target, phrases) => {
+    const chars = [], points = [];
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+        const node = walker.currentNode, parent = node.parentElement;
+        if (!parent || parent.closest('script,style,noscript') ||
+            !parent.getClientRects().length || getComputedStyle(parent).visibility === 'hidden') continue;
+        for (let i = 0; i < node.textContent.length; i++) {
+            const ch = /\s/.test(node.textContent[i]) ? ' ' : node.textContent[i];
+            if (ch === ' ' && chars.at(-1) === ' ') continue;
+            chars.push(ch); points.push([node, i]);
+        }
+    }
+    const text = chars.join(''), origin = target.getBoundingClientRect(), rects = [];
+    for (const phrase of phrases) {
+        const needle = phrase.trim().replace(/\s+/g, ' '), start = text.indexOf(needle);
+        if (start < 0 || text.indexOf(needle, start + 1) >= 0)
+            throw new Error('핵심 문장이 없거나 여러 번 나타납니다: ' + needle);
+        const first = points[start], last = points[start + needle.length - 1];
+        const range = document.createRange();
+        range.setStart(first[0], first[1]); range.setEnd(last[0], last[1] + 1);
+        const visible = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+        if (!visible.length) throw new Error('핵심 문장이 보이지 않습니다: ' + needle);
+        for (const r of visible) {
+            if (r.left < origin.left - 1 || r.right > origin.right + 1 ||
+                r.top < origin.top - 1 || r.bottom > origin.bottom + 1)
+                throw new Error('핵심 문장이 캡처 영역을 벗어납니다');
+            rects.push([r.left - origin.left, r.bottom - origin.top,
+                        r.right - origin.left]);
+        }
+    }
+    return rects;
+}"""
+
+
+def underline_capture(path, rectangles, width, height):
+    with Image.open(path) as original:
+        image = original.convert("RGB")
+    sx, sy = image.width / width, image.height / height
+    draw = ImageDraw.Draw(image)
+    thickness = max(2, round(3 * sy))
+    for left, bottom, right in rectangles:
+        y = min(image.height - thickness, round(bottom * sy) + 1)
+        draw.line((max(0, round(left * sx)), y, min(image.width - 1, round(right * sx)), y),
+                  fill="#e32636", width=thickness)
+    image.save(path)
 
 
 def render(post, sources, directory, captures=()):
@@ -125,3 +184,4 @@ def render(post, sources, directory, captures=()):
             draw_image(directory / filename, card["title"], card["text"], footer)
         files.append(filename)
     return files
+

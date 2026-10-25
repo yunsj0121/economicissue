@@ -78,11 +78,16 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(len(folders), 1)
                 manifest = json.loads((folders[0] / "manifest.json").read_text(encoding="utf-8"))
                 self.assertEqual(len(manifest["images"]), 3)
+                self.assertTrue((folders[0] / manifest["gallery"]).is_file())
+                delivery = json.loads((folders[0] / manifest["delivery"]).read_text(encoding="utf-8"))
+                self.assertEqual(delivery["order"], manifest["images"])
                 for name in manifest["images"]:
                     with Image.open(folders[0] / name) as im:
                         self.assertEqual(im.size, (1080, 1080))
                 text = (folders[0] / "post.txt").read_text(encoding="utf-8")
                 self.assertIn("[이미지 02_body.png]", text)
+                self.assertIn("테스트를 위한 사실 문단입니다\n", text)
+                self.assertNotIn("사실 문단입니다.", text)
                 with self.assertRaises(ValueError):
                     finish({"post": post}, {"sources": sources}, policy, [])
             finally:
@@ -101,3 +106,4 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

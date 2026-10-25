@@ -130,7 +130,13 @@ def discover_direct(collector):
     for source in collector.policy.get("direct_sources", []):
         try:
             body, resolved = collector.fetch_public(source["url"])
-            found = parse_feed(body, source) if source["format"] == "rss" else parse_listing(body.decode("utf-8", "replace"), source)
+            if source["format"] == "page":
+                found = [{"url": resolved, "title": source["title"],
+                          "kind": source["kind"], "provider": source["id"], "published": ""}]
+            elif source["format"] == "rss":
+                found = parse_feed(body, source)
+            else:
+                found = parse_listing(body.decode("utf-8", "replace"), source)
             if not found:
                 raise ValueError("목록 항목 없음: 페이지 구조 또는 접근 상태 확인 필요")
             rows.extend(found[:collector.policy.get("per_provider_limit", 6)])
@@ -168,3 +174,4 @@ def kosis_data(params, key, fetch):
     if len(records) > 200:
         raise ValueError("통계 범위를 200행 이하로 좁혀 주세요")
     return records
+

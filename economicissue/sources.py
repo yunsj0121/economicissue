@@ -219,6 +219,7 @@ class Collector:
 
 
 def discover(collector, manual=()):
+    from .editorial import assess
     p, rows, errors = collector.policy, [], []
     if not manual:
         from .direct import discover_direct
@@ -257,7 +258,8 @@ def discover(collector, manual=()):
                     continue
             except ValueError:
                 pass
-        row["score"] = row.get("score", 0) + relevance + bool(re.search(r"\d", title))
+        row["editorial"] = assess(row["title"], row.get("summary", ""), p)
+        row["score"] = row["editorial"]["score"]
         unique.setdefault(canonical(row["url"]), row)
     from .direct import balanced
     return balanced(list(unique.values()), p["candidate_limit"], p.get("per_provider_limit", 6)), errors
@@ -274,3 +276,4 @@ def compact(text, keywords, limit):
             selected.append(i)
             used += len(block) + 1
     return "\n".join(blocks[i][:limit] for i in sorted(selected))[:limit]
+

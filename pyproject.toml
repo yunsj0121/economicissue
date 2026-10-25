@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "economicissue"
+version = "0.1.0"
+description = "3040 네이버 이슈 포스팅 제작"
+requires-python = ">=3.11"
+dependencies = ["trafilatura>=2,<3", "Pillow>=11,<13", "pypdf>=5,<7", "playwright>=1.50,<2"]
+
+[project.optional-dependencies]
+capture = ["playwright>=1.50,<2"]
+
+[project.scripts]
+economicissue = "economicissue.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["economicissue*"]

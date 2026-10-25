@@ -8,7 +8,10 @@
 - 생활 상황 → 자료·사연 → 숫자 풀이 → 해석 → 짧은 생각의 흐름.
 - 사실·해석·전망 구분. 실제 체험, 가짜 인용, 통계 범위 변경, 중복 설명 금지.
 - 참고 블로그에서는 구조만 참고하며 문장·이미지를 복사하지 않는다.
-- 제목은 구체적인 대상과 쟁점을 포함하고, 썸네일은 짧게 쓴다.
+- 제목은 3040이 자기 상황과 비교하고 싶은 실제 쟁점·숫자·차이·질문으로 호기심을 유도한다
+- 원고는 문장마다 줄을 바꾸고 긴 줄은 32자 기준으로 나눈다
+- 문단 사이는 빈 줄을 두며 문장 끝 마침표는 생략한다
+- 소수점과 URL은 유지하며 수동 원고와 API 원고 모두 같은 후처리를 적용한다
 
 ## 설치·실행
 
@@ -80,18 +83,28 @@ PDF는 실제 링크로 다운로드하고 최대 40페이지까지 읽으며 �
 이용 가능한 원문을 실제 캡처하려면 `pip install '.[capture]'`와 `python -m playwright install chromium`을 실행한다. `policy.json`의 `capture`를 true로 설정하고 다음 명세를 `captures.json`으로 저장한다.
 
 ```json
-[{"card":2,"source_id":"s1","selector":"#specific-chart","rights":"운영자가 확인한 구체적인 이용 허락 또는 이용 조건"}]
+[{"card":2,"source_id":"s1","selector":"#article-content","highlights":["원문에 실제로 있는 핵심 문장"],"rights":"운영자가 확인한 구체적인 이용 허락 또는 이용 조건"}]
 ```
 
-`economicissue build --draft draft.json --captures captures.json`으로 지정 카드를 캡처로 대체한다. selector는 실제 원문에서 지정해야 한다. 자동으로 허락을 판정하지 않으며 실패 시 완성본을 만들지 않는다. 원문 전체보다 필요한 도표를 좁게 캡처한다. 모든 사이트가 지원되는 것은 아니다.
+`economicissue build --draft draft.json --captures captures.json`으로 지정 카드를 캡처로 대체한다. selector는 실제 원문에서 지정해야 한다. 자동으로 허락을 판정하지 않으며 실패 시 완성본을 만들지 않는다. 원문 전체보다 필요한 본문·도표를 좁게 캡처한다. 게시판명·작성 시점이 이미지에 보일 필요는 없다. 대체 이미지 텍스트는 사용자가 별도로 작성한다. 출처 기록은 sources.json에 유지한다. 모든 사이트가 지원되는 것은 아니다.
+
+본문 캡처에는 `highlights`로 핵심 문장을 지정한다. DOM에서 실제 문장의 위치를 찾아 빨간 밑줄을 그리며 여러 줄이나 인라인 태그로 나뉜 문장도 지원한다. 해당 문장이 없거나 여러 번 나타나거나 캡처 밖에 있으면 제작을 중단해 잘못된 강조를 방지한다. 사진을 썸네일 배경으로 쓰는 `card: 1`은 밑줄 문장 없이 사용할 수 있다.
 
 `card: 1`로 지정하면 해당 영역을 썸네일 배경으로 사용하고 어둡게 처리한 뒤 제목을 얹는다. `card: 2`부터는 본문 이미지다. 사용 가능한 사진 영역 또는 도표를 운영자가 실제 페이지에서 지정해야 한다.
 
 ## 결과·검토
 
-`output/<주제해시>/`에 `post.txt`, PNG 3~4장, `manifest.json`, `sources.json`, `review.json`, `draft.json`이 생성된다. post.txt의 이미지 표시 위치에 PNG를 삽입한다. PNG에는 축약 출처를 넣고 원문 링크는 sources.json과 원고 하단에 남긴다. 중간 자료는 완성 이미지와 다른 폴더에 저장한다.
+`output/<주제해시>/`에 `post.txt`, PNG 3~4장, `manifest.json`, `sources.json`, `review.json`, `draft.json`, `delivery.json`, `gallery.html`이 생성된다. post.txt의 이미지 표시 위치에 PNG를 삽입한다. 설명 카드에는 축약 출처를 넣고 원문 링크는 sources.json과 원고 하단에 남긴다. 캡처에는 출처·게시 시점 표시를 덧씌우지 않는다. 중간 자료는 완성 이미지와 다른 폴더에 저장한다.
 
 완성 폴더는 이미지까지 모두 생성한 뒤 한 번에 확정한다. 형식·출처 ID·이미지 개수·삽입 위치·중복 문단을 자동 검사한다. **내용의 의미와 근거가 맞는지, 캡처 이용 조건은 게시 전 사람이 검토해야 한다.** URL·본문 해시·topic_key로 재사용을 막지만 유사 사건을 완벽히 식별하지는 못한다. 제작 이력은 게시 완료 이력이 아니다.
+
+## 이미지 전달 방식
+
+`delivery.json`은 **썸네일 먼저 → 본문 이미지 순서**로 최종 PNG만 지정한다. 전달하는 에이전트·앱은 이 파일들을 한 번에 네이티브 멀티 이미지 갤러리로 첨부해야 한다. 대체 이미지 텍스트는 사용자가 작성하므로 자동 작성하지 않는다. 이미지 파일 생성만으로 채팅 표시 성공을 주장하지 않는다.
+
+저장소 코드는 ChatGPT/iOS의 갤러리 UI를 직접 제어할 수 없다. `delivery.json` 자체가 갤러리를 띄우지는 않으며 받는 앱의 실제 이미지 첨부 기능이 필요하다. 채팅에 네이티브 갤러리를 제공할 때 ZIP·Library 링크·개별 파일 링크로 대체하지 않는다.
+
+함께 생성하는 `gallery.html`은 이미지가 내장된 별도 갤러리다. 파일을 열면 큰 이미지와 아래 썸네일 목록이 보이고, 각 이미지를 선택해 다운로드할 수 있다. 채팅 앱의 네이티브 갤러리와는 별개이며 한 파일만 옮겨도 동작한다.
 
 ## GitHub Actions
 
@@ -108,3 +121,4 @@ python -m unittest discover -s tests -v
 오프라인으로 근거 예산, 출처 검증, 실패 시 부분 결과 제거, 이미지 수와 패키지 생성 등을 확인한다. 실제 검색·유료 모델 호출 성공을 보증하는 테스트는 아니다.
 
 API 명세: [네이버 뉴스](https://developers.naver.com/docs/serviceapi/search/news/news.md), [네이버 웹문서](https://developers.naver.com/docs/serviceapi/search/web/web.md), [OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create).
+

@@ -10,6 +10,8 @@ from .sources import Collector, compact, discover, request
 from .direct import date_iso, kosis_data
 from .writer import RULES, SCHEMA, generate, validate
 from .render import render
+from .formatting import format_post
+from .delivery import write_delivery
 
 KST = timezone(timedelta(hours=9))
 
@@ -104,7 +106,7 @@ def prepare(args, policy):
 
 
 def finish(result, brief, policy, captures):
-    post, sources = result["post"], brief["sources"]
+    post, sources = format_post(result["post"]), brief["sources"]
     validate(post, sources, policy["image_count"])
     # The brief can be passed to a model without retrieving entire documents again.
     used_ids = {sid for p in post["paragraphs"] + post["cards"] for sid in p["source_ids"]}
@@ -139,7 +141,9 @@ def finish(result, brief, policy, captures):
               "captures": captures})
         write(staging / "sources.json", [{k: v for k, v in s.items() if k != "text"} for s in cited])
         write(staging / "draft.json", post)
-        write(staging / "manifest.json", {"topic_key": post["topic_key"], "images": files, "post": "post.txt"})
+        write_delivery(staging, post["title"], files)
+        write(staging / "manifest.json", {"topic_key": post["topic_key"], "images": files,
+              "post": "post.txt", "delivery": "delivery.json", "gallery": "gallery.html"})
         os.replace(staging, destination)
     finally:
         if staging.exists():
@@ -182,3 +186,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

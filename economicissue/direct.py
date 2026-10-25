@@ -132,7 +132,7 @@ def discover_direct(collector):
             body, resolved = collector.fetch_public(source["url"])
             found = parse_feed(body, source) if source["format"] == "rss" else parse_listing(body.decode("utf-8", "replace"), source)
             if not found:
-                raise ValueError("��� �׸� ����: ������ ���� �Ǵ� ���� ���� Ȯ�� �ʿ�")
+                raise ValueError("목록 항목 없음: 페이지 구조 또는 접근 상태 확인 필요")
             rows.extend(found[:collector.policy.get("per_provider_limit", 6)])
             statuses.append({"provider": source["id"], "status": "ok", "items": len(found), "url": resolved})
         except Exception as e:
@@ -158,13 +158,13 @@ def kosis_data(params, key, fetch):
     """Operator-selected series using KOSIS's issued userStatsId; redact the key."""
     safe = {k: params[k] for k in ("userStatsId", "prdSe", "newEstPrdCnt") if k in params}
     if "userStatsId" not in safe:
-        raise ValueError("KOSIS���� �߱��� ����ڷ� userStatsId�� �ʿ��մϴ�")
+        raise ValueError("KOSIS에서 발급한 통계자료 userStatsId가 필요합니다")
     url = "https://kosis.kr/openapi/statisticsData.do?" + urlencode(
         {**safe, "method": "getList", "apiKey": key, "format": "json", "jsonVD": "Y"})
     body, _ = fetch(url)
     records = json.loads(body)
     if not isinstance(records, list) or not records or any("err" in r for r in records):
-        raise ValueError("KOSIS ��� ���� ����")
+        raise ValueError("KOSIS 통계 응답 오류")
     if len(records) > 200:
-        raise ValueError("��� ������ 200�� ���Ϸ� ���� �ּ���")
+        raise ValueError("통계 범위를 200행 이하로 좁혀 주세요")
     return records

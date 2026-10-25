@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: prepare�� �ڷ� ������, run�� ���� �𵨷� �������� ����
+        description: prepare는 자료 수집만, run은 유료 모델로 원고까지 제작
         type: choice
         options: [prepare, run]
         default: prepare

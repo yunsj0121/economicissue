@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "economicissue"
 version = "0.1.0"
-description = "3040 ���̹� �̽� ������ ����"
+description = "3040 네이버 이슈 포스팅 제작"
 requires-python = ">=3.11"
 dependencies = ["trafilatura>=2,<3", "Pillow>=11,<13", "pypdf>=5,<7", "playwright>=1.50,<2"]
 

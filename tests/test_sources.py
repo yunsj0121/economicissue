@@ -12,20 +12,20 @@ from economicissue.sources import Collector, discover
 class SourceTests(unittest.TestCase):
     def test_hana_js_links_dates_and_duplicates(self):
         markup = '''<ul><li><a href="javascript:goPage('/boardDetail.do?hmpeSeqNo=7&amp;menuId=MN1000', '');">
-        <p class="tit ellips02">���� �ҵ�� ����</p></a><div class="date">2026-10-20</div>
+        <p class="tit ellips02">가계 소득과 저축</p></a><div class="date">2026-10-20</div>
         <a href="/boardDetail.do?hmpeSeqNo=7&amp;menuId=MN1000"></a></li></ul>'''
         source = {"id": "hana", "kind": "report", "url": "https://www.hanaif.re.kr/boardList.do",
                   "detail_pattern": r"/boardDetail\.do\?hmpeSeqNo="}
         rows = parse_listing(markup, source)
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["title"], "���� �ҵ�� ����")
+        self.assertEqual(rows[0]["title"], "가계 소득과 저축")
         self.assertTrue(rows[0]["published"].startswith("2026-10-20"))
         self.assertIn("hmpeSeqNo=7&menuId=MN1000", rows[0]["url"])
 
     def test_kb_real_href_and_title(self):
         source = {"id": "kb", "kind": "report", "url": "https://www.kbfg.com/kbresearch/report/reportList.do",
                   "detail_pattern": r"/reportView\.do\?reportId="}
-        rows = parse_listing('<li><a href="reportView.do?reportId=3">�ҵ� ������</a>2026-10-19</li>', source)
+        rows = parse_listing('<li><a href="reportView.do?reportId=3">소득 보고서</a>2026-10-19</li>', source)
         self.assertEqual(rows[0]["url"], "https://www.kbfg.com/kbresearch/report/reportView.do?reportId=3")
 
     def test_rss_http_upgrade_cdata_and_real_dates(self):
@@ -58,8 +58,9 @@ class SourceTests(unittest.TestCase):
     def test_direct_discovery_needs_no_naver_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             policy = json.loads(Path("policy.json").read_text(encoding="utf-8"))
+            self.assertIn("저축", policy["keywords"])
             collector = Collector(policy, tmp)
-            rows = [{"url": "https://example.com/report", "title": "��Ȱ�� ����", "provider": "hana", "kind": "report"}]
+            rows = [{"url": "https://example.com/report", "title": "생활비 저축", "provider": "hana", "kind": "report"}]
             with patch("economicissue.direct.discover_direct", return_value=(rows, [])), \
                  patch.object(collector, "search", side_effect=AssertionError("Naver must not be called")):
                 found, errors = discover(collector)

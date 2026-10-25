@@ -47,7 +47,7 @@ def prepare(args, policy):
         try:
             key = os.getenv("KOSIS_API_KEY")
             if not key:
-                raise ValueError("KOSIS_API_KEY �ʿ�")
+                raise ValueError("KOSIS_API_KEY 필요")
             records = kosis_data(series, key, request)
             text = "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
             excerpt = compact(text, policy["keywords"], min(budget, policy["source_chars"]))
@@ -70,7 +70,7 @@ def prepare(args, policy):
                 normalized = date_iso(source["published"])
                 published = datetime.fromisoformat(normalized) if normalized else None
                 if published is None:
-                    raise ValueError("���� ��¥ �ؼ� �Ұ�")
+                    raise ValueError("원문 날짜 해석 불가")
                 if published.tzinfo is None:
                     published = published.replace(tzinfo=KST)
                 age = (datetime.now(KST) - published).days
@@ -93,13 +93,13 @@ def prepare(args, policy):
           "candidates": len(candidates), "extracted": len(evidence)})
     if not evidence:
         write("output/collection_errors.json", errors)
-        raise ValueError("Ȯ�� ������ ������ �����ϴ�. output/collection_status.json���� ��ó�� ���¸� Ȯ���ϼ���")
+        raise ValueError("확인 가능한 원문이 없습니다. output/collection_status.json에서 출처별 상태를 확인하세요")
     brief = {"created": datetime.now(KST).isoformat(), "sources": evidence,
              "card_count": policy["image_count"] - 1, "collection_errors": errors}
     write("output/brief.json", brief)
     Path("output/instructions.txt").write_text(RULES, encoding="utf-8")
     write("output/schema.json", SCHEMA)
-    print(f"���� {len(evidence)}�� / �ٰ� {sum(len(s['text']) for s in evidence)}��: output/brief.json")
+    print(f"원문 {len(evidence)}개 / 근거 {sum(len(s['text']) for s in evidence)}자: output/brief.json")
     return brief
 
 
@@ -110,32 +110,32 @@ def finish(result, brief, policy, captures):
     used_ids = {sid for p in post["paragraphs"] + post["cards"] for sid in p["source_ids"]}
     cited = [s for s in sources if s["id"] in used_ids]
     if not cited:
-        raise ValueError("����� ��ó�� �����ϴ�")
+        raise ValueError("사용한 출처가 없습니다")
     digest = fingerprint(post["topic_key"])[:12]
     destination = Path("output") / digest
     history = recent_history("state/history.json", policy["duplicate_days"])
     if destination.exists() or any(r["topic_key"] == post["topic_key"] for r in history):
-        raise ValueError("�̹� ������ �����Դϴ�. ���� ����� Ȯ���ϼ���")
+        raise ValueError("이미 제작한 주제입니다. 기존 결과를 확인하세요")
     if captures and not policy["capture"]:
-        raise ValueError("ĸó ������ Ȱ��ȭ�ؾ� �մϴ�")
+        raise ValueError("캡처 설정을 활성화해야 합니다")
     # Publish only a complete bundle; a failed render leaves no partial final set.
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="bundle-", dir="output"))
     try:
         files = render(post, sources, staging, captures)
         body = "\n\n".join(p["text"].strip() for p in post["paragraphs"])
-        lines = [post["title"], "", "[�̹��� 01_thumbnail.png]", ""]
+        lines = [post["title"], "", "[이미지 01_thumbnail.png]", ""]
         for number, paragraph in enumerate(post["paragraphs"], 1):
             lines.extend([paragraph["text"].strip(), ""])
             for i, card in enumerate(post["cards"], 2):
                 if card["after"] == number:
-                    lines.extend([f"[�̹��� {i:02d}_body.png]", ""])
-        lines += ["�ڷ� ��ó", ""] + [f"{s['id']}: {s['title']}\n{s['url']}" for s in cited]
+                    lines.extend([f"[이미지 {i:02d}_body.png]", ""])
+        lines += ["자료 출처", ""] + [f"{s['id']}: {s['title']}\n{s['url']}" for s in cited]
         (staging / "post.txt").write_text("\n".join(lines), encoding="utf-8")
         write(staging / "review.json", {"characters_with_spaces": len(body),
               "warnings": post["warnings"], "usage": result.get("usage", {}),
               "model": result.get("model", "manual"),
-              "note": "��ó ���ᡤ������ �ڵ� �˻�. �ǹ� ��ġ�� ĸó �̿� ������ �Խ� �� ���� �ʿ�.",
+              "note": "출처 연결·형식은 자동 검사. 의미 일치와 캡처 이용 조건은 게시 전 검토 필요.",
               "captures": captures})
         write(staging / "sources.json", [{k: v for k, v in s.items() if k != "text"} for s in cited])
         write(staging / "draft.json", post)
@@ -147,22 +147,22 @@ def finish(result, brief, policy, captures):
     history.append({"date": datetime.now(KST).isoformat(), "topic_key": post["topic_key"],
                     "urls": [s["url"] for s in cited], "hashes": [s["hash"] for s in cited]})
     write("state/history.json", history)
-    print(f"�ϼ�: {destination}/post.txt / �̹��� {len(files)}��")
+    print(f"완성: {destination}/post.txt / 이미지 {len(files)}장")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="�̽� Ž�� �� ���� �� �̹��� ��Ű��")
+    parser = argparse.ArgumentParser(description="이슈 탐색 → 원고 → 이미지 패키지")
     parser.add_argument("command", choices=["prepare", "build", "run"])
     parser.add_argument("--policy", default="policy.json")
-    parser.add_argument("--url", action="append", default=[], help="�ڵ� Ž�� ��� ����� ���� ����; �ݺ� ����")
+    parser.add_argument("--url", action="append", default=[], help="자동 탐색 대신 사용할 실제 원문; 반복 가능")
     parser.add_argument("--brief", default="output/brief.json")
-    parser.add_argument("--draft", help="���� �ۼ� JSON; build���� �ʼ�")
-    parser.add_argument("--captures", help="������ ī���� ĸó ���� JSON ����")
+    parser.add_argument("--draft", help="수동 작성 JSON; build에서 필수")
+    parser.add_argument("--captures", help="선택한 카드의 캡처 명세 JSON 파일")
     args = parser.parse_args()
     try:
         policy = read(args.policy)
         if not policy or policy["image_count"] not in (3, 4):
-            raise ValueError("policy.json�� �̹��� ����(3 �Ǵ� 4)�� Ȯ���ϼ���")
+            raise ValueError("policy.json과 이미지 개수(3 또는 4)를 확인하세요")
         if args.command in ("prepare", "run"):
             brief = prepare(args, policy)
             if args.command == "prepare":
@@ -170,14 +170,14 @@ def main():
             result = generate(brief["sources"], policy, ".cache")
         else:
             if not args.draft:
-                raise ValueError("build���� --draft draft.json�� �ʿ��մϴ�")
+                raise ValueError("build에는 --draft draft.json이 필요합니다")
             brief = read(args.brief)
             if not brief:
-                raise ValueError("���� prepare�� �ٰ� �ڷḦ �غ��ϼ���")
+                raise ValueError("먼저 prepare로 근거 자료를 준비하세요")
             result = {"post": read(args.draft)}
         finish(result, brief, policy, read(args.captures, []) if args.captures else [])
     except (ValueError, KeyError, TypeError, OSError) as error:
-        parser.exit(1, f"�ߴ�: {error}\n")
+        parser.exit(1, f"중단: {error}\n")
 
 
 if __name__ == "__main__":

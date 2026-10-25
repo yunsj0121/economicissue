@@ -12,7 +12,7 @@ def font_path():
     for path in paths:
         if path and Path(path).is_file():
             return path
-    raise ValueError("�ѱ� ��Ʈ ��� KOREAN_FONT�� �����ϼ���")
+    raise ValueError("한글 폰트 경로 KOREAN_FONT를 설정하세요")
 
 
 def wrap(text, font, width):
@@ -52,12 +52,12 @@ def draw_image(path, title, text, footer, thumbnail=False, background=None):
             if y + len(body_lines) * (size + 22) < 920:
                 break
         else:
-            raise ValueError("�̹��� ������ �ʹ� ��ϴ�")
+            raise ValueError("이미지 문구가 너무 깁니다")
         for line in body_lines:
             draw.text((80, y), line, fill=ink, font=body_font)
             y += size + 22
     if y > 940:
-        raise ValueError("�̹��� ������ ������ �ʰ��մϴ�")
+        raise ValueError("이미지 제목이 영역을 초과합니다")
     draw.text((80, 998), footer[:65], fill="#9ba8aa" if thumbnail else "#596a6c",
               font=ImageFont.truetype(fp, 22))
     image.save(path)
@@ -66,7 +66,7 @@ def draw_image(path, title, text, footer, thumbnail=False, background=None):
 def capture_source(spec, source, path):
     # Screenshots require a concrete usage basis supplied by the operator.
     if not spec.get("rights", "").strip() or not spec.get("selector"):
-        raise ValueError("ĸó���� �̿� �ٰſ� ��Ȯ�� CSS selector�� �ʿ��մϴ�")
+        raise ValueError("캡처에는 이용 근거와 정확한 CSS selector가 필요합니다")
     public_url(source["url"])
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -83,13 +83,13 @@ def capture_source(spec, source, path):
         page = context.new_page()
         response = page.goto(source["url"], wait_until="domcontentloaded", timeout=30000)
         if not response or response.status >= 400:
-            raise ValueError("ĸó ���� ���� ����")
+            raise ValueError("캡처 원문 접속 실패")
         target = page.locator(spec["selector"])
         if target.count() != 1:
-            raise ValueError("ĸó ����� �ϳ��� Ư������ �ʽ��ϴ�")
+            raise ValueError("캡처 대상이 하나로 특정되지 않습니다")
         box = target.bounding_box()
         if not box or box["height"] > 1800 or box["width"] < 300:
-            raise ValueError("ĸó ũ�⸦ �б� ���� ���� �ּ���")
+            raise ValueError("캡처 크기를 읽기 쉽게 좁혀 주세요")
         target.screenshot(path=str(path))
         browser.close()
 
@@ -99,15 +99,15 @@ def render(post, sources, directory, captures=()):
     known = {s["id"]: s for s in sources}
     indices = [s.get("card") for s in captures]
     if len(set(indices)) != len(indices) or any(i not in range(1, len(post["cards"]) + 2) for i in indices):
-        raise ValueError("ĸó �̹��� ��ȣ�� �ߺ��ǰų� ������ ����ϴ�")
+        raise ValueError("캡처 이미지 번호가 중복되거나 범위를 벗어납니다")
     thumb = next((s for s in captures if s.get("card") == 1), None)
     background = directory / "background.tmp.png"
     if thumb:
         if thumb.get("source_id") not in known:
-            raise ValueError("����� ĸó ��ó ����")
+            raise ValueError("썸네일 캡처 출처 오류")
         capture_source(thumb, known[thumb["source_id"]], background)
     try:
-        draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "��ü �� ���� �̽�", True,
+        draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "노체 · 경제 이슈", True,
                    background if thumb else None)
     finally:
         background.unlink(missing_ok=True)
@@ -118,10 +118,10 @@ def render(post, sources, directory, captures=()):
         if spec:
             sid = spec.get("source_id")
             if sid not in card["source_ids"]:
-                raise ValueError("ĸó�� ī�� ��ó�� �ٸ��ϴ�")
+                raise ValueError("캡처와 카드 출처가 다릅니다")
             capture_source(spec, known[sid], directory / filename)
         else:
-            footer = " �� ".join(sid + " " + urlsplit(known[sid]["url"]).netloc for sid in card["source_ids"])
+            footer = " · ".join(sid + " " + urlsplit(known[sid]["url"]).netloc for sid in card["source_ids"])
             draw_image(directory / filename, card["title"], card["text"], footer)
         files.append(filename)
     return files

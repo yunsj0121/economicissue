@@ -1,8 +1,8 @@
 {
   "queries": [],
   "official_queries": [],
-  "keywords": ["����", "����", "������", "����", "��Ȱ��", "���Ǳ�", "��ȥ", "����", "�ڻ�", "����", "����", "�ҵ�", "�Һ�", "����", "����", "����", "��ä", "����", "�߻���", "����"],
-  "exclude": ["������ ����", "û�� ����", "����", "���", "������"],
+  "keywords": ["월급", "연봉", "성과급", "저축", "생활비", "축의금", "결혼", "노후", "자산", "월세", "물가", "소득", "소비", "가구", "금융", "주택", "부채", "은퇴", "중산층", "연금"],
+  "exclude": ["입주자 모집", "청약 접수", "연예", "사망", "성범죄"],
   "max_age_days": 7,
   "report_age_days": 120,
   "per_provider_limit": 6,
@@ -11,8 +11,8 @@
   "max_pdf_pages": 40,
   "kosis_series": [],
   "direct_sources": [
-    {"id":"blind-invest","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/�ֽġ�����","detail_pattern":"/kr/post/"},
-    {"id":"blind-marriage","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/��ȥ��Ȱ","detail_pattern":"/kr/post/"},
+    {"id":"blind-invest","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/주식·투자","detail_pattern":"/kr/post/"},
+    {"id":"blind-marriage","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/결혼생활","detail_pattern":"/kr/post/"},
     {"id":"hana","kind":"report","format":"html","url":"https://www.hanaif.re.kr/boardList.do?menuId=MN1000&tabMenuId=MN1108","detail_pattern":"/boardDetail\\.do\\?hmpeSeqNo="},
     {"id":"kb","kind":"report","format":"html","url":"https://www.kbfg.com/kbresearch/report/reportList.do","detail_pattern":"/reportView\\.do\\?reportId="},
     {"id":"kb-brand","kind":"report","format":"html","url":"https://www.kbfg.com/kbresearch/brand/brandList.do","detail_pattern":"/brandView\\.do\\?reportId="},

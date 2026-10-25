@@ -13,24 +13,24 @@ from economicissue.render import render
 
 
 def fixture():
-    sources = [{"id": "s1", "title": "���� �׽�Ʈ �ڷ�", "url": "https://example.com/report",
-                "text": "�׽�Ʈ���� ����ϴ� ����", "hash": "abc", "published": "2026-01-01"}]
-    post = {"ready": True, "reason": "", "topic_key": "fixture-2026", "title": "��Ȱ�� ���캼 ��",
-            "thumbnail": "��Ȱ�� ����\n������ �ұ�?", "warnings": [],
-            "paragraphs": [{"kind": "fact", "text": "�׽�Ʈ�� ���� ��� �����Դϴ�.", "source_ids": ["s1"]},
-                           {"kind": "opinion", "text": "������ ���캼 �ʿ䰡 �ְڽ��ϴ�.", "source_ids": []}],
-            "cards": [{"title": "���� Ȯ��", "text": "���� ����� ���� Ȯ���մϴ�.", "source_ids": ["s1"], "after": 1},
-                      {"title": "���� ��", "text": "�ٸ� ���ǵ� �Բ� ���캾�ϴ�.", "source_ids": ["s1"], "after": 2}]}
+    sources = [{"id": "s1", "title": "가상 테스트 자료", "url": "https://example.com/report",
+                "text": "테스트에만 사용하는 내용", "hash": "abc", "published": "2026-01-01"}]
+    post = {"ready": True, "reason": "", "topic_key": "fixture-2026", "title": "생활비를 살펴볼 때",
+            "thumbnail": "생활비 점검\n어디부터 할까?", "warnings": [],
+            "paragraphs": [{"kind": "fact", "text": "테스트를 위한 사실 문단입니다.", "source_ids": ["s1"]},
+                           {"kind": "opinion", "text": "조건을 살펴볼 필요가 있겠습니다.", "source_ids": []}],
+            "cards": [{"title": "기준 확인", "text": "조사 대상을 먼저 확인합니다.", "source_ids": ["s1"], "after": 1},
+                      {"title": "조건 비교", "text": "다른 조건도 함께 살펴봅니다.", "source_ids": ["s1"], "after": 2}]}
     return post, sources
 
 
 class PipelineTests(unittest.TestCase):
     def test_compact_preserves_order_and_budget(self):
-        result = compact("���� ����\n������ �̾߱�\n���� ���� �ٰ�\n��Ȱ�� ���� �ٰ�", ["����", "��Ȱ��"], 25)
+        result = compact("도입 문맥\n무관한 이야기\n저축 관련 근거\n생활비 관련 근거", ["저축", "생활비"], 25)
         self.assertLessEqual(len(result), 25)
-        self.assertTrue(result.startswith("���� ����"))
-        self.assertIn("����", result)
-        self.assertNotIn("������", result)
+        self.assertTrue(result.startswith("도입 문맥"))
+        self.assertIn("저축", result)
+        self.assertNotIn("무관한", result)
 
     def test_url_tracking_removed_but_article_id_kept(self):
         self.assertEqual(canonical("https://example.com/view?id=7&utm_source=x#part"),
@@ -56,6 +56,7 @@ class PipelineTests(unittest.TestCase):
              patch("economicissue.writer.request", return_value=(json.dumps(response).encode(), "https://api.openai.com")) as api:
             policy = {"image_count": 3, "max_output_tokens": 500}
             first = generate(sources, policy, tmp)
+            sources[0]["retrieved"] = "new retrieval time must not cause another model call"
             second = generate(sources, policy, tmp)
             self.assertEqual(first, second)
             self.assertEqual(api.call_count, 1)
@@ -81,7 +82,7 @@ class PipelineTests(unittest.TestCase):
                     with Image.open(folders[0] / name) as im:
                         self.assertEqual(im.size, (1080, 1080))
                 text = (folders[0] / "post.txt").read_text(encoding="utf-8")
-                self.assertIn("[�̹��� 02_body.png]", text)
+                self.assertIn("[이미지 02_body.png]", text)
                 with self.assertRaises(ValueError):
                     finish({"post": post}, {"sources": sources}, policy, [])
             finally:

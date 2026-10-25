@@ -34,10 +34,10 @@ def canonical(url):
 def public_url(url):
     p = urllib.parse.urlsplit(url)
     if p.scheme != "https" or not p.hostname or p.username or p.password or p.port not in (None, 443):
-        raise ValueError("���� HTTPS �ּҸ� �����մϴ�")
+        raise ValueError("공개 HTTPS 주소만 지원합니다")
     for info in socket.getaddrinfo(p.hostname, 443, type=socket.SOCK_STREAM):
         if not ipaddress.ip_address(info[4][0]).is_global:
-            raise ValueError("���� �ּҴ� �������� �ʽ��ϴ�")
+            raise ValueError("내부 주소는 수집하지 않습니다")
 
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
@@ -53,7 +53,7 @@ def request(url, headers=None, data=None):
     with urllib.request.build_opener(SafeRedirect).open(req, timeout=45) as response:
         body = response.read(20_000_001)
         if len(body) > 20_000_000:
-            raise ValueError("���� ũ�� �ʰ�")
+            raise ValueError("응답 크기 초과")
         return body, response.url
 
 
@@ -76,7 +76,7 @@ class Collector:
     def search(self, query, web=False):
         client, secret = os.getenv("NAVER_CLIENT_ID"), os.getenv("NAVER_CLIENT_SECRET")
         if not client or not secret:
-            raise ValueError("�ڵ� Ž������ NAVER_CLIENT_ID�� NAVER_CLIENT_SECRET�� �ʿ��մϴ�")
+            raise ValueError("자동 탐색에는 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET이 필요합니다")
         kind = "webkr" if web else "news"
         params = {"query": query, "display": self.policy["search_limit"]}
         if not web:
@@ -108,14 +108,14 @@ class Collector:
     def fetch_public(self, url):
         def load():
             if not self.allowed(url):
-                raise ValueError("robots �Ǵ� ���� ������ ���� ����")
+                raise ValueError("robots 또는 접속 오류로 수집 제외")
             host = urllib.parse.urlsplit(url).netloc
             interval = self.policy.get("request_interval_seconds", 1)
             time.sleep(max(0, interval - (time.monotonic() - self.last_request.get(host, 0))))
             self.last_request[host] = time.monotonic()
             body, resolved = request(url)
             if not self.allowed(resolved):
-                raise ValueError("�̵��� ���� ���� �Ұ�")
+                raise ValueError("이동된 원문 수집 불가")
             return {"body": body.hex(), "url": resolved}
         value = self.cached_json("public:" + url, load)
         return bytes.fromhex(value["body"]), value["url"]
@@ -130,7 +130,7 @@ class Collector:
                 pages.append(f"[PDF p.{number}]\n{text[:10000]}")
         text = "\n".join(pages)
         if len(text) < 300:
-            raise ValueError("PDF ���� ����: ��ĵ ���� OCR�� �������� �ʽ��ϴ�")
+            raise ValueError("PDF 본문 부족: 스캔 문서 OCR은 지원하지 않습니다")
         return text, len(reader.pages)
 
     def browser_pdf(self, url):
@@ -157,24 +157,24 @@ class Collector:
                 page = context.new_page()
                 response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
                 if not response or response.status >= 400:
-                    raise ValueError("������ �� ���� ����")
-                links = page.locator("a").filter(has_text=re.compile(r"\.pdf|�ٿ�ε�\s*\(PDF\)", re.I))
+                    raise ValueError("보고서 상세 접속 실패")
+                links = page.locator("a").filter(has_text=re.compile(r"\.pdf|다운로드\s*\(PDF\)", re.I))
                 if not links.count():
-                    raise ValueError("���� PDF �ٿ�ε� ��ũ ����")
+                    raise ValueError("공개 PDF 다운로드 링크 없음")
                 with page.expect_download(timeout=30000) as event:
                     links.first.click()
                 download = event.value
                 if download.failure():
-                    raise ValueError("PDF �ٿ�ε� ����")
+                    raise ValueError("PDF 다운로드 실패")
                 public_url(download.url)
                 if not self.allowed(download.url):
-                    raise ValueError("÷�� ���� ���� �Ұ�")
+                    raise ValueError("첨부 파일 수집 불가")
                 path = Path(download.path())
                 if path.stat().st_size > 20_000_000:
-                    raise ValueError("PDF ũ�� �ʰ�")
+                    raise ValueError("PDF 크기 초과")
                 body = path.read_bytes()
                 if not body.startswith(b"%PDF"):
-                    raise ValueError("PDF ������ �ƴմϴ�")
+                    raise ValueError("PDF 형식이 아닙니다")
                 return body
             finally:
                 browser.close()
@@ -203,15 +203,15 @@ class Collector:
                 try:
                     pdf = self.fetch_public(pdfs[0])[0] if pdfs else self.browser_pdf(resolved)
                     pdf_text, total_pages = self.pdf_text(pdf)
-                    text = pdf_text + ("\n[���� HTML ����]\n" + text if text else "")
+                    text = pdf_text + ("\n[공식 HTML 설명]\n" + text if text else "")
                 except Exception as e:
-                    pdf_note = "÷�� �̼���: " + type(e).__name__
+                    pdf_note = "첨부 미수집: " + type(e).__name__
                     if len(text) < 300:
-                        raise ValueError("÷�� ���� ���� �� HTML �ٰ� ����") from e
+                        raise ValueError("첨부 수집 실패 및 HTML 근거 부족") from e
             if len(text) < 300:
-                raise ValueError("���� ����: �α��Ρ����� �Ǵ� �ٰ� ����")
-            if any(w in text[:300].lower() for w in ("access denied", "captcha", "�α��� �� �̿�")):
-                raise ValueError("���� ���� ���� ����")
+                raise ValueError("본문 부족: 로그인·차단 또는 근거 부족")
+            if any(w in text[:300].lower() for w in ("access denied", "captcha", "로그인 후 이용")):
+                raise ValueError("접근 제한 원문 제외")
             return {"url": canonical(resolved), "title": clean(doc.title or "") if doc else "",
                     "published": doc.date or "" if doc else "", "text": text, "attachment_note": pdf_note,
                     "retrieved": datetime.now(timezone.utc).isoformat()}
@@ -240,8 +240,8 @@ def discover(collector, manual=()):
                 rows.append({"url": item.get("originallink") or item["link"],
                              "title": title, "score": score, "provider": "naver", "kind": "report" if web else "news"})
         except (OSError, ValueError, KeyError) as e:
-            errors.append(f"�˻� {query}: {type(e).__name__}")
-    rows.extend({"url": u, "title": "���� ����", "score": 99, "provider": "manual", "kind": "manual"} for u in manual)
+            errors.append(f"검색 {query}: {type(e).__name__}")
+    rows.extend({"url": u, "title": "수동 원문", "score": 99, "provider": "manual", "kind": "manual"} for u in manual)
     unique = {}
     for row in rows:
         title = row["title"] + " " + row.get("summary", "")

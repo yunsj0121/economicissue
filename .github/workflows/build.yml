@@ -1,0 +1,64 @@
+name: Build issue package
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: prepare�� �ڷ� ������, run�� ���� �𵨷� �������� ����
+        type: choice
+        options: [prepare, run]
+        default: prepare
+permissions:
+  contents: read
+concurrency:
+  group: economicissue-build
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+      KOSIS_API_KEY: ${{ secrets.KOSIS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y fonts-nanum
+      - run: pip install .
+      - run: python -m playwright install --with-deps chromium
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            state
+            .cache
+            output
+          key: issue-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: issue-state-
+      - run: economicissue "$MODE"
+        env:
+          MODE: ${{ inputs.mode }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-${{ github.run_id }}
+          path: |
+            output/*/post.txt
+            output/*/*.png
+            output/*/*.json
+            output/collection_status.json
+            output/brief.json
+            output/instructions.txt
+            output/schema.json
+          retention-days: 30
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            state
+            .cache
+            output
+          key: issue-state-${{ github.run_id }}-${{ github.run_attempt }}

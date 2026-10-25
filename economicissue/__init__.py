@@ -1,0 +1,1 @@
+"""Daily issue publishing package."""

@@ -1,0 +1,32 @@
+{
+  "queries": [],
+  "official_queries": [],
+  "keywords": ["����", "����", "������", "����", "��Ȱ��", "���Ǳ�", "��ȥ", "����", "�ڻ�", "����", "����", "�ҵ�", "�Һ�", "����", "����", "����", "��ä", "����", "�߻���", "����"],
+  "exclude": ["������ ����", "û�� ����", "����", "���", "������"],
+  "max_age_days": 7,
+  "report_age_days": 120,
+  "per_provider_limit": 6,
+  "fetch_limit": 12,
+  "request_interval_seconds": 1,
+  "max_pdf_pages": 40,
+  "kosis_series": [],
+  "direct_sources": [
+    {"id":"blind-invest","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/�ֽġ�����","detail_pattern":"/kr/post/"},
+    {"id":"blind-marriage","kind":"community","format":"html","url":"https://www.teamblind.com/kr/topics/��ȥ��Ȱ","detail_pattern":"/kr/post/"},
+    {"id":"hana","kind":"report","format":"html","url":"https://www.hanaif.re.kr/boardList.do?menuId=MN1000&tabMenuId=MN1108","detail_pattern":"/boardDetail\\.do\\?hmpeSeqNo="},
+    {"id":"kb","kind":"report","format":"html","url":"https://www.kbfg.com/kbresearch/report/reportList.do","detail_pattern":"/reportView\\.do\\?reportId="},
+    {"id":"kb-brand","kind":"report","format":"html","url":"https://www.kbfg.com/kbresearch/brand/brandList.do","detail_pattern":"/brandView\\.do\\?reportId="},
+    {"id":"kosis","kind":"statistics","format":"rss","url":"https://kosis.kr/rss/themes_rss.jsp"},
+    {"id":"national-data","kind":"statistics","format":"rss","url":"https://mods.go.kr/menu.es?mid=a10301010000&act=rss"}
+  ],
+  "search_limit": 12,
+  "candidate_limit": 12,
+  "source_limit": 4,
+  "source_chars": 2400,
+  "evidence_chars": 6400,
+  "max_output_tokens": 4500,
+  "cache_hours": 12,
+  "duplicate_days": 45,
+  "image_count": 3,
+  "capture": false
+}

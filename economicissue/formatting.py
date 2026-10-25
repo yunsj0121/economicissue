@@ -29,6 +29,8 @@ def mobile_text(text, width=32):
 def format_post(post):
     post = copy.deepcopy(post)
     post["title"] = post["title"].strip().rstrip(".．。")
+    for choice in post.get("editorial", {}).get("title_candidates", []):
+        choice["title"] = choice["title"].strip().rstrip(".．。")
     post["thumbnail"] = mobile_text(post["thumbnail"], width=0)
     for paragraph in post["paragraphs"]:
         paragraph["text"] = mobile_text(paragraph["text"])

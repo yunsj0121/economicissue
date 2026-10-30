@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from PIL import Image
 from economicissue.delivery import write_delivery
+from economicissue.browser import launch
 from economicissue.formatting import format_post, mobile_text
 from economicissue.render import capture_source, HIGHLIGHT_RECTS, underline_capture
 from test_pipeline import fixture
@@ -58,9 +59,10 @@ class DeliveryTests(unittest.TestCase):
             self.assertIn('&lt;테스트 제목&gt;', page)
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                browser = p.chromium.launch()
+                browser = launch(p.chromium)
                 tab = browser.new_page(viewport={'width': 390, 'height': 844})
-                tab.goto((directory / 'gallery.html').as_uri())
+                tab.route('https://example.com/gallery', lambda route: route.fulfill(body=page, content_type='text/html'))
+                tab.goto('https://example.com/gallery')
                 self.assertEqual(tab.locator('nav button').count(), 3)
                 tab.locator('nav button').nth(2).click()
                 self.assertEqual(tab.locator('#position').inner_text(), '3 / 3')
@@ -72,7 +74,7 @@ class DeliveryTests(unittest.TestCase):
     def test_wrapped_source_text_underline_and_invalid_phrase(self):
         from playwright.sync_api import sync_playwright
         with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = launch(p.chromium)
             context = browser.new_context(java_script_enabled=False)
             page = context.new_page()
             page.set_content('<article style="width:300px;font:24px sans-serif">'

@@ -137,7 +137,8 @@ class Collector:
         """Click actual public PDF links; do not guess hidden download endpoints."""
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            from .browser import launch
+            browser = launch(p.chromium)
             try:
                 context = browser.new_context(accept_downloads=True, service_workers="block")
                 host = urllib.parse.urlsplit(url).hostname
@@ -192,6 +193,18 @@ class Collector:
             doc = trafilatura.bare_extraction(body, url=resolved, include_comments=False,
                                               include_tables=True, with_metadata=True)
             text = (doc.text or "").strip() if doc else ""
+            inspected, browser_error = {}, ""
+            if self.policy.get("browser_inspection"):
+                from .browser import inspect_page
+                try:
+                    inspected = inspect_page(resolved, self.policy, self.allowed)
+                    text = inspected["text"]
+                    resolved = inspected["url"]
+                except Exception as e:
+                    browser_error = type(e).__name__ + ": " + str(e)[:180]
+            if ("teamblind.com" in (urllib.parse.urlsplit(resolved).hostname or "") and
+                    self.policy.get("require_browser_for_community") and not inspected):
+                raise ValueError("블라인드 개별 원문 브라우저 확인 실패: " + browser_error)
             pdf_note = ""
             host = urllib.parse.urlsplit(resolved).hostname or ""
             if host in {"www.hanaif.re.kr", "hanaif.re.kr", "www.kbfg.com", "kbfg.com"}:
@@ -212,10 +225,15 @@ class Collector:
                 raise ValueError("본문 부족: 로그인·차단 또는 근거 부족")
             if any(w in text[:300].lower() for w in ("access denied", "captcha", "로그인 후 이용")):
                 raise ValueError("접근 제한 원문 제외")
-            return {"url": canonical(resolved), "title": clean(doc.title or "") if doc else "",
-                    "published": doc.date or "" if doc else "", "text": text, "attachment_note": pdf_note,
+            return {**inspected, "url": canonical(resolved),
+                    "title": inspected.get("title") or (clean(doc.title or "") if doc else ""),
+                    "published": inspected.get("published") or (doc.date or "" if doc else ""),
+                    "text": text, "attachment_note": pdf_note, "browser_error": browser_error,
+                    "browser_verified": bool(inspected),
+                    "access_state": "content_verified" if inspected else "text_extracted",
                     "retrieved": datetime.now(timezone.utc).isoformat()}
-        return self.cached_json("article:" + url, load)
+        version = "browser-v1:" if self.policy.get("browser_inspection") else ""
+        return self.cached_json("article:" + version + url, load)
 
 
 def discover(collector, manual=()):

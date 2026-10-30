@@ -12,7 +12,9 @@ from .writer import SCHEMA, generate, validate, writing_rules
 from .editorial import assess, SIGNALS
 from .render import render
 from .formatting import format_post
-from .delivery import write_delivery
+from .delivery import write_delivery, write_preview
+from .quality import check_publication
+from .topics import make_choices, choose
 
 KST = timezone(timedelta(hours=9))
 
@@ -101,6 +103,11 @@ def prepare(args, policy):
         source = {**source, "id": f"s{len(evidence)+1}", "text": excerpt}
         evidence.append(source)
         budget -= len(excerpt)
+    # Keep bounded evidence for all verified choices, not just the automatically ranked brief.
+    research = {"created": datetime.now(KST).isoformat(), "sources": [
+        {**source, "id": f"r{number}", "text": compact(source["text"], policy["keywords"], policy["source_chars"])}
+        for number, source in enumerate(ranked, 1)]}
+    write("output/research.json", research)
     write("output/topic_candidates.json", [{"url": s["url"], "title": s["title"],
           "provider": s["provider"], "kind": s["kind"], "editorial": s["editorial"],
           "selected_for_brief": any(e["url"] == s["url"] for e in evidence)} for s in ranked])
@@ -119,8 +126,11 @@ def prepare(args, policy):
 
 
 def finish(result, brief, policy, captures):
-    post, sources = format_post(result["post"]), brief["sources"]
-    validate(post, sources, policy["image_count"])
+    post, sources = format_post(result["post"], policy), brief["sources"]
+    validate(post, sources, policy["image_count"], policy)
+    selection = brief.get("selection")
+    if selection and (post["title"] != selection["title"] or post["topic_key"] != selection["topic_key"]):
+        raise ValueError("선택한 제목·소재가 변경되었습니다")
     # The brief can be passed to a model without retrieving entire documents again.
     used_ids = {sid for p in post["paragraphs"] + post["cards"] for sid in p["source_ids"]}
     cited = [s for s in sources if s["id"] in used_ids]
@@ -131,14 +141,13 @@ def finish(result, brief, policy, captures):
     history = recent_history("state/history.json", policy["duplicate_days"])
     if destination.exists() or any(r["topic_key"] == post["topic_key"] for r in history):
         raise ValueError("이미 제작한 주제입니다. 기존 결과를 확인하세요")
-    if captures and not policy["capture"]:
+    if (captures or any(c.get("visual") == "evidence" for c in post["cards"])) and not policy["capture"]:
         raise ValueError("캡처 설정을 활성화해야 합니다")
     # Publish only a complete bundle; a failed render leaves no partial final set.
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="bundle-", dir="output"))
     try:
-        files = render(post, sources, staging, captures)
-        body = "\n\n".join(p["text"].strip() for p in post["paragraphs"])
+        files = render(post, sources, staging, captures, policy)
         lines = [post["title"], "", "[이미지 01_thumbnail.png]", ""]
         for number, paragraph in enumerate(post["paragraphs"], 1):
             lines.extend([paragraph["text"].strip(), ""])
@@ -146,8 +155,11 @@ def finish(result, brief, policy, captures):
                 if card["after"] == number:
                     lines.extend([f"[이미지 {i:02d}_body.png]", ""])
         lines += ["자료 출처", ""] + [f"{s['id']}: {s['title']}\n{s['url']}" for s in cited]
+        if post.get("hashtags"):
+            lines += ["", " ".join(post["hashtags"])]
         (staging / "post.txt").write_text("\n".join(lines), encoding="utf-8")
-        write(staging / "review.json", {"characters_with_spaces": len(body),
+        write(staging / "review.json", {**check_publication(post, policy),
+              "selection": selection,
               "warnings": post["warnings"], "usage": result.get("usage", {}),
               "model": result.get("model", "manual"),
               "editorial": post.get("editorial", {}),
@@ -156,8 +168,11 @@ def finish(result, brief, policy, captures):
         write(staging / "sources.json", [{k: v for k, v in s.items() if k != "text"} for s in cited])
         write(staging / "draft.json", post)
         write_delivery(staging, post["title"], files)
+        write_preview(staging, post, sources, files)
         write(staging / "manifest.json", {"topic_key": post["topic_key"], "images": files,
-              "post": "post.txt", "delivery": "delivery.json", "gallery": "gallery.html"})
+              "post": "post.txt", "copyable_post": "copyable_post.md",
+              "delivery": "delivery.json", "gallery": "gallery.html", "preview": "preview.html",
+              "capture_failures": "capture_failures.json"})
         os.replace(staging, destination)
     finally:
         if staging.exists():
@@ -170,28 +185,53 @@ def finish(result, brief, policy, captures):
 
 def main():
     parser = argparse.ArgumentParser(description="이슈 탐색 → 원고 → 이미지 패키지")
-    parser.add_argument("command", choices=["prepare", "build", "run"])
+    parser.add_argument("command", choices=["prepare", "topics", "draft", "build", "run"])
     parser.add_argument("--policy", default="policy.json")
     parser.add_argument("--url", action="append", default=[], help="자동 탐색 대신 사용할 실제 원문; 반복 가능")
     parser.add_argument("--brief", default="output/brief.json")
     parser.add_argument("--draft", help="수동 작성 JSON; build에서 필수")
     parser.add_argument("--captures", help="선택한 카드의 캡처 명세 JSON 파일")
+    parser.add_argument("--candidate", type=int, help="사용자가 선택한 제목 후보 번호 1~10")
+    parser.add_argument("--candidates", default="output/title_candidates.json")
+    parser.add_argument("--research", default="output/research.json")
     args = parser.parse_args()
     try:
         policy = read(args.policy)
-        if not policy or policy["image_count"] not in (3, 4):
-            raise ValueError("policy.json과 이미지 개수(3 또는 4)를 확인하세요")
-        if args.command in ("prepare", "run"):
-            brief = prepare(args, policy)
-            if args.command == "prepare":
-                return
-            result = generate(brief["sources"], policy, ".cache")
+        if not policy or policy["image_count"] not in range(3, 7):
+            raise ValueError("policy.json과 이미지 개수(3~6)를 확인하세요")
+        if policy.get("length") and not 0 < policy["length"]["min"] <= policy["length"]["target"] <= policy["length"]["max"]:
+            raise ValueError("원고 길이 설정을 확인하세요")
+        if args.command == "prepare":
+            prepare(args, policy)
+            return
+        if args.command == "topics" or (args.command == "run" and args.candidate is None):
+            prepare(args, policy)
+            research = read(args.research)
+            choices = make_choices(research, policy, ".cache")
+            write(args.candidates, choices)
+            for c in choices["candidates"]:
+                root = next(s for s in research["sources"] if s["id"] == c["root_source_id"])
+                print(f"{c['number']}. {c['title']}\n   {root['published']} · {root['url']}\n   {c['angle']}")
+            print("후보 번호를 고른 뒤 economicissue draft --candidate 번호 로 제작하세요")
+            return
+        if args.command in ("draft", "run"):
+            if args.candidate is None:
+                raise ValueError("먼저 topics 실행 후 --candidate 번호로 제목을 선택하세요")
+            research, choices = read(args.research), read(args.candidates)
+            if not research or not choices:
+                raise ValueError("먼저 topics로 제목 후보와 근거를 준비하세요")
+            selection, sources = choose(choices, research, args.candidate, policy)
+            brief = {"created": datetime.now(KST).isoformat(), "sources": sources,
+                     "selection": selection, "card_count": policy["image_count"] - 1}
+            write(args.brief, brief)
+            result = generate(sources, policy, ".cache", selection)
+            write("output/selected_draft.json", result["post"])
         else:
             if not args.draft:
                 raise ValueError("build에는 --draft draft.json이 필요합니다")
             brief = read(args.brief)
             if not brief:
-                raise ValueError("먼저 prepare로 근거 자료를 준비하세요")
+                raise ValueError("먼저 prepare 또는 draft로 근거 자료를 준비하세요")
             result = {"post": read(args.draft)}
         finish(result, brief, policy, read(args.captures, []) if args.captures else [])
     except (ValueError, KeyError, TypeError, OSError) as error:

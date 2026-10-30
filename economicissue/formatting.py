@@ -3,6 +3,33 @@ import copy
 import re
 
 
+_VISUAL_META = (
+    r"(?:원문|보고서|자료)(?:\s*(?:기준(?:으로)?|수치(?:를)?|내용(?:을)?))?\s*(?:재구성|정리)한\s*(?:표|그래프|이미지)(?:입니다|예요|이에요)?",
+    r"실제\s*적용\s*금리(?:가|는)?\s*(?:아님|아닙니다|아니에요)",
+    r"원문\s*캡처\s*(?:아님|아닙니다|아니에요)",
+    r"(?:연구소의\s*)?공식\s*(?:조사\s*항목|권고)(?:이|가)?\s*(?:아님|아닙니다|아니에요)",
+    r"본문의\s*가계\s*점검\s*기준",
+    r"직접\s*계산(?:한)?(?:\s*가상\s*비교)?",
+    r"자료\s*발췌\s*·\s*해설",
+)
+
+
+def visual_text(text):
+    """Drop standalone production labels, preserving figures and calculation inputs."""
+    lines = []
+    for line in text.splitlines():
+        if any(re.fullmatch(pattern + r"[.．。]*", line.strip()) for pattern in _VISUAL_META):
+            continue
+        parts = []
+        for part in re.split(r"\s+[·|]\s+", line):
+            part = part.strip()
+            if part and not any(re.fullmatch(pattern + r"[.．。]*", part) for pattern in _VISUAL_META):
+                parts.append(part)
+        if parts:
+            lines.append(" · ".join(parts))
+    return "\n".join(lines)
+
+
 def mobile_text(text):
     # Protect URLs and decimal points while separating sentence boundaries.
     urls = []
@@ -39,7 +66,7 @@ def format_post(post, policy=None):
         paragraph["text"] = text
     for card in post["cards"]:
         card["title"] = card["title"].strip().rstrip(".．。")
-        card["text"] = mobile_text(card["text"])
+        card["text"] = visual_text(mobile_text(card["text"]))
     if "hashtags" in post:
         post["hashtags"] = [t.strip() for t in post["hashtags"]]
     return post

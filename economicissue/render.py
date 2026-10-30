@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .sources import public_url
+from .formatting import visual_text
 
 
 def font_path():
@@ -29,7 +30,20 @@ def wrap(text, font, width):
     return result
 
 
+def thumbnail_layout(title, fp):
+    # Keep type large and inside the space above the complete evidence panel.
+    for size in range(112, 79, -1):
+        font = ImageFont.truetype(fp, size)
+        lines = wrap(title, font, 920)
+        step = round(size * 1.2)
+        if len(lines) <= 3 and all(150 + i * step + font.getbbox(line)[3] <= 450
+                                   for i, line in enumerate(lines)):
+            return font, lines, step
+    raise ValueError("썸네일 문구를 짧게 줄여 주세요. 큰 글자로 세 줄 안에 배치해야 합니다")
+
+
 def draw_image(path, title, text, footer, thumbnail=False, background=None, compact=False):
+    text, footer = visual_text(text), visual_text(footer)
     image = Image.new("RGB", (1080, 1080), "#142d35" if thumbnail else "#f5f3ed")
     if background:
         with Image.open(background) as original:
@@ -38,21 +52,18 @@ def draw_image(path, title, text, footer, thumbnail=False, background=None, comp
             image.paste(evidence, ((1080 - evidence.width) // 2, 490 + (470 - evidence.height) // 2))
     draw = ImageDraw.Draw(image)
     ink = "#ffffff" if thumbnail else "#17333c"
-    draw.rectangle((70, 85, 190, 99), fill="#e9ba53")
+    accent_y = 28 if compact and not thumbnail else 85
+    draw.rectangle((70, accent_y, 190, accent_y + 14), fill="#e9ba53")
     fp = font_path()
     title_font = ImageFont.truetype(fp, 55)
     if thumbnail:
-        for size in range(80, 47, -1):
-            title_font = ImageFont.truetype(fp, size)
-            if len(wrap(title, title_font, 920)) <= 3:
-                break
-        else:
-            raise ValueError("썸네일 문구를 세 줄 이내로 줄여 주세요")
-    lines = wrap(title, title_font, 920)
-    y = 180 if thumbnail else (70 if compact else 170)
+        title_font, lines, line_step = thumbnail_layout(title, fp)
+    else:
+        lines, line_step = wrap(title, title_font, 920), 80
+    y = 150 if thumbnail else (70 if compact else 170)
     for line in lines:
         draw.text((80, y), line, fill=ink, font=title_font)
-        y += 90 if thumbnail else 80
+        y += line_step
     if not thumbnail:
         y = max(y + 50, 220 if compact else 390)
         for size in range(45, 27, -1):
@@ -77,6 +88,7 @@ def draw_image(path, title, text, footer, thumbnail=False, background=None, comp
 
 
 def capture_frame(path, caption, url):
+    caption = visual_text(caption)
     with Image.open(path) as original:
         image = original.convert("RGB")
     # A wide, short evidence excerpt stays readable; long pages must be narrowed upstream.
@@ -145,13 +157,13 @@ def draw_data(path, card, footer):
             y += height
     data_box = (40, 190 if card["visual"] == "table" else 140, 1040, y + 70)
     y += 130 if card["visual"] == "chart" else 45
-    caption_lines = wrap(card["text"], ImageFont.truetype(fp, 32), 960)
+    caption_lines = wrap(visual_text(card["text"]), ImageFont.truetype(fp, 32), 960)
     if len(caption_lines) > 5:
         raise ValueError("표·그래프 해설을 5줄 이내로 줄여 주세요")
     for line in caption_lines:
         draw.text((60, y), line, font=ImageFont.truetype(fp, 32), fill="#17333c")
         y += 44
-    draw.text((60, y + 35), footer[:65], font=ImageFont.truetype(fp, 22), fill="#596a6c")
+    draw.text((60, y + 35), visual_text(footer)[:65], font=ImageFont.truetype(fp, 22), fill="#596a6c")
     image.crop((0, 0, 1080, min(1800, y + 110))).save(path)
     return data_box
 
@@ -347,7 +359,7 @@ def render(post, sources, directory, captures=(), policy=None):
                 first_evidence = filename
         files.append(filename)
     if not thumb and thumbnail_from and first_evidence:
-        draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "자료 발췌 · 해설", True,
+        draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "", True,
                    panel if panel.exists() else directory / first_evidence)
         status.insert(0, {"image": "01_thumbnail.png", "type": "evidence_layout", "from": first_evidence})
     elif not thumb:

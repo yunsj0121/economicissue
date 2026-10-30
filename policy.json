@@ -121,11 +121,11 @@
   "source_limit": 4,
   "source_chars": 2400,
   "evidence_chars": 6400,
-  "max_output_tokens": 4500,
+  "max_output_tokens": 6500,
   "cache_hours": 12,
   "duplicate_days": 45,
-  "image_count": 3,
-  "capture": false,
+  "image_count": 5,
+  "capture": true,
   "topic_families": {
     "생활비·저축": [
       "생활비",
@@ -184,5 +184,32 @@
     "선택·갈등": 3,
     "결과·비교": 2,
     "구체금액·비율": 2
-  }
+  },
+  "title_candidate_count": 10,
+  "hashtag_count": 20,
+  "blank_line_between_sentences": true,
+  "spread_images": true,
+  "browser_inspection": true,
+  "require_browser_for_community": true,
+  "length": {
+    "target": 1500,
+    "min": 1400,
+    "max": 1600,
+    "include_hashtags": true,
+    "include_title": false
+  },
+  "capture_rights": "공개 원문 중 비평·설명에 필요한 일부 인용, 원문과 해설 구분 및 출처 표시",
+  "browser_sites": {
+    "www.teamblind.com": {
+      "selectors": [
+        "article",
+        "main",
+        "[role=main]",
+        "[class*=article]"
+      ]
+    }
+  },
+  "thumbnail_from_card": true,
+  "minimum_data_images": 2,
+  "mixed_visuals": true
 }

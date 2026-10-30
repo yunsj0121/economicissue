@@ -46,3 +46,29 @@ images.forEach((image,i)=>{const b=document.createElement('button');b.type='butt
 const img=document.createElement('img');img.src=image.src;img.alt='';b.append(img);b.onclick=()=>select(i);nav.append(b)});select(0);
 </script></html>'''
     (directory / "gallery.html").write_text(page.replace("__TITLE__", html.escape(title)).replace("__IMAGES__", payload), encoding="utf-8")
+
+
+def write_preview(directory, post, sources, files):
+    """Portable mobile preview in publication order, with sources before hashtags."""
+    import base64
+    directory = Path(directory)
+    def image(name):
+        data = base64.b64encode((directory / name).read_bytes()).decode("ascii")
+        return '<img alt="" src="data:image/png;base64,' + data + '">'
+    parts = ["<!doctype html><html lang=ko><meta charset=utf-8>",
+             '<meta name="viewport" content="width=device-width,initial-scale=1">',
+             '<style>body{max-width:680px;margin:32px auto;padding:0 20px;font:18px/1.9 system-ui;color:#222}img{width:100%;height:auto;margin:24px 0}p{white-space:pre-wrap;margin:28px 0}aside{font-size:13px;overflow-wrap:anywhere}h1{font-size:26px}</style>',
+             '<title>' + html.escape(post['title']) + '</title>',
+             '<h1>' + html.escape(post['title']) + '</h1>', image(files[0])]
+    for number, paragraph in enumerate(post['paragraphs'], 1):
+        parts.append('<p>' + html.escape(paragraph['text']) + '</p>')
+        for index, card in enumerate(post['cards'], 1):
+            if card['after'] == number:
+                parts.append(image(files[index]))
+    used = {sid for c in post['paragraphs'] + post['cards'] for sid in c['source_ids']}
+    parts.append('<aside>자료 출처<br>')
+    for source in sources:
+        if source['id'] in used:
+            parts.append(html.escape(source['title']) + '<br>' + html.escape(source['url']) + '<br>')
+    parts.extend(['</aside>', '<p>' + html.escape(' '.join(post.get('hashtags', []))) + '</p></html>'])
+    (directory / 'preview.html').write_text(''.join(parts), encoding='utf-8')

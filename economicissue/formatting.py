@@ -26,15 +26,20 @@ def mobile_text(text):
     return "\n".join(lines).strip()
 
 
-def format_post(post):
+def format_post(post, policy=None):
     post = copy.deepcopy(post)
     post["title"] = post["title"].strip().rstrip(".．。")
     for choice in post.get("editorial", {}).get("title_candidates", []):
         choice["title"] = choice["title"].strip().rstrip(".．。")
     post["thumbnail"] = mobile_text(post["thumbnail"])
     for paragraph in post["paragraphs"]:
-        paragraph["text"] = mobile_text(paragraph["text"])
+        text = mobile_text(paragraph["text"])
+        if (policy or {}).get("blank_line_between_sentences"):
+            text = "\n\n".join(line.strip() for line in text.splitlines() if line.strip())
+        paragraph["text"] = text
     for card in post["cards"]:
         card["title"] = card["title"].strip().rstrip(".．。")
         card["text"] = mobile_text(card["text"])
+    if "hashtags" in post:
+        post["hashtags"] = [t.strip() for t in post["hashtags"]]
     return post

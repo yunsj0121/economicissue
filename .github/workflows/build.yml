@@ -3,12 +3,25 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: prepare는 자료 수집만, run은 유료 모델로 원고까지 제작
+        description: prepare는 수집, topics/run은 제목 후보, draft는 선택한 원고 제작
         type: choice
-        options: [prepare, run]
+        options: [prepare, topics, draft, run]
         default: prepare
+      candidate:
+        description: draft에서 선택할 제목 번호 (1~10)
+        type: string
+        default: ''
+      research_run_id:
+        description: draft에서 가져올 제목 후보 제작 실행 ID (Artifact)
+        type: string
+        default: ''
+      captures:
+        description: 선택적인 캡처 명세 파일 경로 (저장소 내 JSON)
+        type: string
+        default: ''
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: economicissue-build
   cancel-in-progress: false
@@ -38,9 +51,32 @@ jobs:
             output
           key: issue-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: issue-state-
-      - run: economicissue "$MODE"
+      - name: Download selected research bundle
+        if: inputs.mode == 'draft'
+        uses: actions/download-artifact@v4
+        with:
+          name: issue-${{ inputs.research_run_id }}
+          run-id: ${{ inputs.research_run_id }}
+          github-token: ${{ github.token }}
+          path: selected-research
+      - name: Build requested stage
+        shell: bash
         env:
           MODE: ${{ inputs.mode }}
+          CANDIDATE: ${{ inputs.candidate }}
+          RESEARCH_RUN_ID: ${{ inputs.research_run_id }}
+          CAPTURES: ${{ inputs.captures }}
+        run: |
+          args=("$MODE")
+          if [[ "$MODE" == "draft" ]]; then
+            [[ "$CANDIDATE" =~ ^([1-9]|10)$ && "$RESEARCH_RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+            args+=(--candidate "$CANDIDATE" --research selected-research/research.json --candidates selected-research/title_candidates.json)
+          fi
+          if [[ -n "$CAPTURES" ]]; then
+            [[ "$CAPTURES" != /* && "$CAPTURES" != *..* && "$CAPTURES" == *.json ]] || exit 1
+            args+=(--captures "$CAPTURES")
+          fi
+          economicissue "${args[@]}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -49,6 +85,10 @@ jobs:
             output/*/post.txt
             output/*/*.png
             output/*/*.json
+            output/*/*.html
+            output/title_candidates.json
+            output/research.json
+            output/selected_draft.json
             output/collection_status.json
             output/brief.json
             output/instructions.txt

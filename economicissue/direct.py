@@ -71,7 +71,12 @@ def https_url(raw, base):
 
 
 def date_iso(value):
-    match = re.search(r"\b(20\d{2})[-./](\d{1,2})[-./](\d{1,2})\b", value or "")
+    try:
+        parsed = datetime.fromisoformat((value or "").replace("Z", "+00:00"))
+        return parsed.isoformat()
+    except ValueError:
+        pass
+    match = re.search(r"\b(20\d{2})[-./]\s*(\d{1,2})[-./]\s*(\d{1,2})\b", value or "")
     if match:
         try:
             return datetime(*map(int, match.groups()), tzinfo=timezone.utc).isoformat()

@@ -285,11 +285,18 @@ def render(post, sources, directory, captures=(), policy=None):
         raise ValueError("캡처 이미지 번호가 중복되거나 범위를 벗어납니다")
     thumb = next((s for s in captures if s.get("card") == 1), None)
     background = directory / "background.tmp.png"
+    capture_failures = []
     if thumb:
         if thumb.get("source_id") not in known:
             raise ValueError("썸네일 캡처 출처 오류")
-        capture_source(thumb, known[thumb["source_id"]], background)
-        status.append({"image": "01_thumbnail.png", "type": "capture", "source_id": thumb["source_id"]})
+        try:
+            capture_source(thumb, known[thumb["source_id"]], background)
+        except Exception as error:
+            capture_failures.append({"image": "01_thumbnail.png", "source_id": thumb["source_id"],
+                                     "url": known[thumb["source_id"]]["url"], "reason": str(error)})
+            thumb = None
+        else:
+            status.append({"image": "01_thumbnail.png", "type": "capture", "source_id": thumb["source_id"]})
     try:
         draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "노체 · 경제 이슈", True,
                    background if thumb else None)
@@ -308,14 +315,21 @@ def render(post, sources, directory, captures=(), policy=None):
                 raise ValueError("캡처와 카드 출처가 다릅니다")
             try:
                 capture_source(spec, known[sid], directory / filename)
+                capture_frame(directory / filename, card["text"], known[sid]["url"])
                 if first_evidence is None:
                     with Image.open(directory / filename) as raw:
                         raw.save(panel)
-                capture_frame(directory / filename, card["text"], known[sid]["url"])
             except Exception as error:
-                raise ValueError(f"이미지 {i} 원문 캡처 실패: {error}") from error
-            status.append({"image": filename, "type": "capture", "source_id": sid,
-                           "url": known[sid]["url"], "selector": spec["selector"]})
+                capture_failures.append({"image": filename, "source_id": sid,
+                                         "url": known[sid]["url"], "reason": str(error)})
+                draw_image(directory / filename, "원문 캡처 불가", card["text"],
+                           f"자료 바로가기: {urlsplit(known[sid]['url']).netloc}",
+                           compact=bool(card.get("visual")))
+                status.append({"image": filename, "type": "capture_failed", "source_id": sid,
+                               "url": known[sid]["url"], "reason": str(error)})
+            else:
+                status.append({"image": filename, "type": "capture", "source_id": sid,
+                               "url": known[sid]["url"], "selector": spec["selector"]})
         else:
             footer = " · ".join(sid + " " + urlsplit(known[sid]["url"]).netloc for sid in card["source_ids"])
             if card.get("visual") in {"table", "chart"}:
@@ -329,7 +343,8 @@ def render(post, sources, directory, captures=(), policy=None):
             status.append({"image": filename, "type": card.get("visual", "explanation"),
                            "source_ids": card["source_ids"]})
         if first_evidence is None and (spec or card.get("visual") in {"table", "chart"}):
-            first_evidence = filename
+            if not any(failure["image"] == filename for failure in capture_failures):
+                first_evidence = filename
         files.append(filename)
     if not thumb and thumbnail_from and first_evidence:
         draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "자료 발췌 · 해설", True,
@@ -341,5 +356,6 @@ def render(post, sources, directory, captures=(), policy=None):
     import json, shutil
     shutil.rmtree(directory / ".capture-cache", ignore_errors=True)
     (directory / "image_review.json").write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+    (directory / "capture_failures.json").write_text(json.dumps(capture_failures, ensure_ascii=False, indent=2), encoding="utf-8")
     return files
 

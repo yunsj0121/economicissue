@@ -170,7 +170,9 @@ def finish(result, brief, policy, captures):
         write_delivery(staging, post["title"], files)
         write_preview(staging, post, sources, files)
         write(staging / "manifest.json", {"topic_key": post["topic_key"], "images": files,
-              "post": "post.txt", "delivery": "delivery.json", "gallery": "gallery.html", "preview": "preview.html"})
+              "post": "post.txt", "copyable_post": "copyable_post.md",
+              "delivery": "delivery.json", "gallery": "gallery.html", "preview": "preview.html",
+              "capture_failures": "capture_failures.json"})
         os.replace(staging, destination)
     finally:
         if staging.exists():

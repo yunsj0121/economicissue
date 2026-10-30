@@ -86,6 +86,7 @@ jobs:
             output/*/*.png
             output/*/*.json
             output/*/*.html
+            output/*/*.md
             output/title_candidates.json
             output/research.json
             output/selected_draft.json

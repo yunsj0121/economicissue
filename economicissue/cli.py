@@ -167,11 +167,12 @@ def finish(result, brief, policy, captures):
               "captures": captures})
         write(staging / "sources.json", [{k: v for k, v in s.items() if k != "text"} for s in cited])
         write(staging / "draft.json", post)
-        write_delivery(staging, post["title"], files)
+        write_delivery(staging, post["title"], files, post)
         write_preview(staging, post, sources, files)
         write(staging / "manifest.json", {"topic_key": post["topic_key"], "images": files,
               "post": "post.txt", "copyable_post": "copyable_post.md",
-              "delivery": "delivery.json", "gallery": "gallery.html", "preview": "preview.html",
+              "delivery": "delivery.json", "generation_jobs": "image-generation.json", "preview": "preview.html",
+              "delivery_status": "pending_generation_and_native_attachment",
               "capture_failures": "capture_failures.json"})
         os.replace(staging, destination)
     finally:
@@ -180,7 +181,8 @@ def finish(result, brief, policy, captures):
     history.append({"date": datetime.now(KST).isoformat(), "topic_key": post["topic_key"],
                     "urls": [s["url"] for s in cited], "hashes": [s["hash"] for s in cited]})
     write("state/history.json", history)
-    print(f"완성: {destination}/post.txt / 이미지 {len(files)}장")
+    print(f"원고·이미지 입력 준비: {destination}/post.txt / {len(files)}장")
+    print("전달 대기: image-generation.json의 실제 이미지 생성과 원문 PNG의 묶음 첨부가 필요합니다")
 
 
 def main():

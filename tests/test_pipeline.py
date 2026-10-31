@@ -78,7 +78,9 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(len(folders), 1)
                 manifest = json.loads((folders[0] / "manifest.json").read_text(encoding="utf-8"))
                 self.assertEqual(len(manifest["images"]), 3)
-                self.assertTrue((folders[0] / manifest["gallery"]).is_file())
+                self.assertTrue((folders[0] / manifest["generation_jobs"]).is_file())
+                self.assertNotIn('gallery', manifest)
+                self.assertEqual(manifest['delivery_status'], 'pending_generation_and_native_attachment')
                 delivery = json.loads((folders[0] / manifest["delivery"]).read_text(encoding="utf-8"))
                 self.assertEqual(delivery["order"], manifest["images"])
                 for name in manifest["images"]:

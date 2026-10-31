@@ -15,6 +15,8 @@ def check_publication(post, policy):
                               any(not re.fullmatch(r"#[가-힣A-Za-z0-9_]+", t) for t in tags)):
         raise ValueError(f"서로 다른 관련 해시태그 {count}개가 필요합니다")
     body = "\n\n".join(p["text"] for p in post["paragraphs"])
+    if re.search(r"기사\s*(?:에서는|에\s*따르면|속(?:의)?\s)|보도에\s*따르면", body):
+        raise ValueError("기사 전달 표현을 빼고 상황과 사실부터 설명하세요. 출처는 본문 밖에 둡니다")
     if count is not None and "#" in body:
         raise ValueError("해시태그는 본문 대신 hashtags에 작성하세요")
     length = policy.get("length", {})

@@ -38,6 +38,17 @@ def publication_fixture():
 
 
 class PublicationTests(unittest.TestCase):
+    def test_article_narration_is_rejected_without_rejecting_case_attribution(self):
+        post, _, policy = publication_fixture()
+        post = format_post(post, policy)
+        for text in ('기사에서는 생활비를 소개했어요', '기사에 따르면 생활비가 늘었어요',
+                     '기사 속 부부의 이야기예요', '보도에 따르면 생활비가 늘었어요'):
+            post['paragraphs'][0]['text'] = text
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, '기사 전달 표현'):
+                check_publication(post, policy)
+        post['paragraphs'][0]['text'] = '익명 게시물의 글쓴이는 생활비로 250만 원을 쓴다고 설명했어요'
+        check_publication(post, policy)
+
     def test_spacing_tags_count_and_failed_length(self):
         post, sources, policy = publication_fixture()
         post = format_post(post, policy)
@@ -215,6 +226,9 @@ class FullDefaultPolicyTests(unittest.TestCase):
              patch('economicissue.render.public_url'):
             path = Path(tmp) / 'capture.png'
             capture_source(spec, {'url': 'https://example.com/article'}, path)
+            raw = Path(tmp) / 'raw-captures' / 'capture.png'
+            self.assertTrue(raw.is_file())
+            self.assertNotEqual(raw.read_bytes(), path.read_bytes())
             with Image.open(path) as im:
                 self.assertTrue(any(p == (227, 38, 54) for p in im.convert('RGB').getdata()))
             with self.assertRaisesRegex(ValueError, '원문이 변경'):

@@ -9,6 +9,7 @@ from pathlib import Path
 from .sources import Collector, compact, discover, request
 from .direct import date_iso, kosis_data
 from .writer import SCHEMA, generate, validate, writing_rules
+from .voice import narrative_review
 from .editorial import assess, SIGNALS
 from .render import render
 from .formatting import format_post
@@ -163,6 +164,7 @@ def finish(result, brief, policy, captures):
               "warnings": post["warnings"], "usage": result.get("usage", {}),
               "model": result.get("model", "manual"),
               "editorial": post.get("editorial", {}),
+              "narrative_review": narrative_review(post),
               "note": "출처 연결·형식은 자동 검사. 의미 일치와 캡처 이용 조건은 게시 전 검토 필요.",
               "captures": captures})
         write(staging / "sources.json", [{k: v for k, v in s.items() if k != "text"} for s in cited])

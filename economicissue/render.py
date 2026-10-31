@@ -1,5 +1,7 @@
 """Deterministic Korean images; optional permitted source captures."""
 import os
+import hashlib
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -216,6 +218,9 @@ def capture_source(spec, source, path):
             raise ValueError("캡처 크기를 읽기 쉽게 좁혀 주세요")
         rectangles = target.evaluate(HIGHLIGHT_RECTS, highlights) if highlights else []
         target.screenshot(path=str(path), animations="disabled", mask=masks)
+        raw_path = path.parent / "raw-captures" / path.name
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, raw_path)
         if rectangles:
             underline_capture(path, rectangles, box["width"], box["height"])
         browser.close()
@@ -308,7 +313,7 @@ def render(post, sources, directory, captures=(), policy=None):
                                      "url": known[thumb["source_id"]]["url"], "reason": str(error)})
             thumb = None
         else:
-            status.append({"image": "01_thumbnail.png", "type": "capture", "source_id": thumb["source_id"]})
+            status.append({"image": "01_thumbnail.png", "type": "capture_layout", "source_id": thumb["source_id"]})
     try:
         draw_image(directory / "01_thumbnail.png", post["thumbnail"], "", "노체 · 경제 이슈", True,
                    background if thumb else None)
@@ -327,7 +332,6 @@ def render(post, sources, directory, captures=(), policy=None):
                 raise ValueError("캡처와 카드 출처가 다릅니다")
             try:
                 capture_source(spec, known[sid], directory / filename)
-                capture_frame(directory / filename, card["text"], known[sid]["url"])
                 if first_evidence is None:
                     with Image.open(directory / filename) as raw:
                         raw.save(panel)
@@ -342,6 +346,10 @@ def render(post, sources, directory, captures=(), policy=None):
             else:
                 status.append({"image": filename, "type": "capture", "source_id": sid,
                                "url": known[sid]["url"], "selector": spec["selector"]})
+                raw_path = directory / "raw-captures" / filename
+                if raw_path.exists():
+                    status[-1].update(raw_path=str(raw_path.relative_to(directory)),
+                                      raw_sha256=hashlib.sha256(raw_path.read_bytes()).hexdigest())
         else:
             footer = " · ".join(sid + " " + urlsplit(known[sid]["url"]).netloc for sid in card["source_ids"])
             if card.get("visual") in {"table", "chart"}:

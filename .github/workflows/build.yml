@@ -84,6 +84,7 @@ jobs:
           path: |
             output/*/post.txt
             output/*/*.png
+            output/*/raw-captures/*.png
             output/*/*.json
             output/*/*.html
             output/*/*.md

@@ -6,8 +6,9 @@ import unittest
 from pathlib import Path
 
 from economicissue.cli import finish
-from economicissue.voice import narrative_review
-from economicissue.writer import SCHEMA, validate
+from economicissue.quality import check_publication
+from economicissue.voice import narrative_review, validate_prose_style
+from economicissue.writer import SCHEMA, validate, writing_rules
 from test_pipeline import fixture
 from test_publication import publication_fixture
 
@@ -25,6 +26,36 @@ def plan():
 
 
 class VoiceTests(unittest.TestCase):
+    def test_reflective_style_accepts_questions_and_original_quotes(self):
+        post = {"paragraphs": [{"text": '2억 원을 잃었다고 한다\n\n나라면 팔 수 있을까\n\n“손절도 실력이죠”\n\n그 말이 마음에 남았다'}]}
+        validate_prose_style(post, {"writing_style": "reflective_da"})
+
+    def test_reflective_style_rejects_polite_prose_and_source_introductions(self):
+        for text in ('쉽게 답하기 어려운데요', '손실률은 50%입니다',
+                     '한 익명 투자자는 손절을 고민했다고 한다',
+                     '한 익명 직장인은 투자금 절반을 잃었다고 한다',
+                     '블라인드에서는 손실 이야기가 나왔다', '게시글 작성자는 주식을 접을지 물었다'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                validate_prose_style({"paragraphs": [{"text": text}]}, {"writing_style": "reflective_da"})
+
+    def test_generated_and_manual_instructions_use_reflective_style(self):
+        rules = writing_rules({"writing_style": "reflective_da"})
+        self.assertIn('~다체', rules)
+        self.assertIn('혼자 생각하고 고민하는 독백', rules)
+        self.assertNotIn('구어체 존댓말', rules)
+        self.assertNotIn('~다체로 바꾸지 않는다', rules)
+
+    def test_publication_check_applies_default_policy_to_manual_body(self):
+        policy = json.loads(Path('policy.json').read_text())
+        self.assertEqual(policy['writing_style'], 'reflective_da')
+        for text in ('남은 돈을 맡길 수 있을까\n\n다시 생각해볼 일이다', '계속 보유해도 될까요'):
+            post = {'paragraphs': [{'text': text}], 'cards': [], 'hashtags': []}
+            if text.endswith('까요'):
+                with self.assertRaisesRegex(ValueError, '~다체'):
+                    check_publication(post, {'writing_style': policy['writing_style']})
+            else:
+                check_publication(post, {'writing_style': policy['writing_style']})
+
     def test_new_schema_requires_plan_but_legacy_draft_still_builds(self):
         self.assertIn("narrative", SCHEMA["required"])
         post, sources = fixture()
@@ -74,3 +105,4 @@ class VoiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

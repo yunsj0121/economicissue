@@ -1,4 +1,5 @@
 {
+  "writing_style": "reflective_da",
   "queries": [],
   "official_queries": [],
   "keywords": [
@@ -213,3 +214,4 @@
   "minimum_data_images": 2,
   "mixed_visuals": true
 }
+

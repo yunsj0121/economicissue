@@ -1,11 +1,22 @@
 {
-  "queries": [],
+  "queries": [
+    "직장인 투자 손실 예금 깼다 사연",
+    "퇴직 후 연금 신청 거절 건강보험료 사례",
+    "가족 생활비 결혼자금 부모 지원 사연",
+    "집 팔려다 세금 전세보증금 계약 피해 사례"
+  ],
   "official_queries": [],
   "keywords": [
     "월급",
     "연봉",
     "성과급",
     "저축",
+    "재테크",
+    "건강보험료",
+    "건보료",
+    "지역의보",
+    "보증금",
+    "사업",
     "생활비",
     "축의금",
     "결혼",
@@ -54,6 +65,14 @@
   "max_pdf_pages": 40,
   "kosis_series": [],
   "direct_sources": [
+    {
+      "id": "82cook",
+      "kind": "community",
+      "format": "html",
+      "url": "https://82cook.com/entiz/enti.php?bn=15",
+      "detail_pattern": "/entiz/read\\.php\\?[^#]*\\bnum=\\d+",
+      "filter_listing_keywords": true
+    },
     {
       "id": "blind-invest",
       "kind": "community",
@@ -200,6 +219,12 @@
   },
   "capture_rights": "공개 원문 중 비평·설명에 필요한 일부 인용, 원문과 해설 구분 및 출처 표시",
   "browser_sites": {
+    "82cook.com": {
+      "published_pattern": "작성일\\s*:\\s*(20\\d{2}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})"
+    },
+    "www.82cook.com": {
+      "published_pattern": "작성일\\s*:\\s*(20\\d{2}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})"
+    },
     "www.teamblind.com": {
       "selectors": [
         "article",

@@ -61,11 +61,19 @@ class SourceTests(unittest.TestCase):
             self.assertIn("저축", policy["keywords"])
             collector = Collector(policy, tmp)
             rows = [{"url": "https://example.com/report", "title": "생활비 저축", "provider": "hana", "kind": "report"}]
-            with patch("economicissue.direct.discover_direct", return_value=(rows, [])), \
+            with patch.dict("os.environ", {"NAVER_CLIENT_ID": "", "NAVER_CLIENT_SECRET": ""}), \
+                 patch("economicissue.direct.discover_direct", return_value=(rows, [])), \
                  patch.object(collector, "search", side_effect=AssertionError("Naver must not be called")):
                 found, errors = discover(collector)
             self.assertEqual(len(found), 1)
             self.assertFalse(errors)
+
+    def test_82cook_reads_title_instead_of_duplicate_number_link(self):
+        policy = json.loads(Path("policy.json").read_text(encoding="utf-8"))
+        source = next(row for row in policy["direct_sources"] if row["id"] == "82cook")
+        markup = '<tr><td><a href="/entiz/read.php?bn=15&num=123">1851304</a></td><td>' \
+                 '<a href="/entiz/read.php?bn=15&num=123">퇴직 후 건보료 고민</a></td></tr>'
+        self.assertEqual([row["title"] for row in parse_listing(markup, source)], ["퇴직 후 건보료 고민"])
 
     def test_kosis_key_not_returned_with_records(self):
         def fetch(url):

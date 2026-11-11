@@ -225,9 +225,15 @@ class Collector:
                 raise ValueError("본문 부족: 로그인·차단 또는 근거 부족")
             if any(w in text[:300].lower() for w in ("access denied", "captcha", "로그인 후 이용")):
                 raise ValueError("접근 제한 원문 제외")
+            published = inspected.get("published") or (doc.date or "" if doc else "")
+            pattern = self.policy.get("browser_sites", {}).get(host, {}).get("published_pattern")
+            if pattern and not inspected.get("published"):
+                match = re.search(pattern, clean(body.decode("utf-8", "replace")))
+                if match:
+                    published = match.group(1)
             return {**inspected, "url": canonical(resolved),
                     "title": inspected.get("title") or (clean(doc.title or "") if doc else ""),
-                    "published": inspected.get("published") or (doc.date or "" if doc else ""),
+                    "published": published,
                     "text": text, "attachment_note": pdf_note, "browser_error": browser_error,
                     "browser_verified": bool(inspected),
                     "access_state": "content_verified" if inspected else "text_extracted",
@@ -237,14 +243,16 @@ class Collector:
 
 
 def discover(collector, manual=()):
+    from .direct import date_iso
     from .editorial import assess
     p, rows, errors = collector.policy, [], []
     if not manual:
         from .direct import discover_direct
         rows, collector.statuses = discover_direct(collector)
-    for query, web in [(q, False) for q in p["queries"]] + [(q, True) for q in p["official_queries"]]:
-        if manual:
-            break
+    queries = [(q, False) for q in p["queries"]] + [(q, True) for q in p["official_queries"]]
+    if manual or not (os.getenv("NAVER_CLIENT_ID") and os.getenv("NAVER_CLIENT_SECRET")):
+        queries = []
+    for query, web in queries:
         try:
             for item in collector.search(query, web):
                 title = clean(item["title"])
@@ -257,7 +265,8 @@ def discover(collector, manual=()):
                         continue
                 score = sum(w in title for w in p["keywords"]) + bool(re.search(r"\d", title))
                 rows.append({"url": item.get("originallink") or item["link"],
-                             "title": title, "score": score, "provider": "naver", "kind": "report" if web else "news"})
+                             "title": title, "published": date_iso(published),
+                             "score": score, "provider": "naver", "kind": "report" if web else "news"})
         except (OSError, ValueError, KeyError) as e:
             errors.append(f"검색 {query}: {type(e).__name__}")
     rows.extend({"url": u, "title": "수동 원문", "score": 99, "provider": "manual", "kind": "manual"} for u in manual)

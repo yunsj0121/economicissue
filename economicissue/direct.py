@@ -108,7 +108,7 @@ def parse_listing(markup, source):
         box = context(anchor)
         title_nodes = [n for n in box.find() if "tit" in n.attrs.get("class", "").split()]
         title = (title_nodes[0].text() if title_nodes else anchor.text()).strip()
-        if not title:
+        if not title or title.isdecimal():
             continue
         seen.add(url)
         rows.append({"url": url, "title": re.sub(r"\s+", " ", title)[:180],
@@ -144,6 +144,9 @@ def discover_direct(collector):
                 found = parse_listing(body.decode("utf-8", "replace"), source)
             if not found:
                 raise ValueError("목록 항목 없음: 페이지 구조 또는 접근 상태 확인 필요")
+            if source.get("filter_listing_keywords"):
+                keywords = collector.policy["keywords"]
+                found = [row for row in found if any(word in row["title"] for word in keywords)]
             rows.extend(found[:collector.policy.get("per_provider_limit", 6)])
             statuses.append({"provider": source["id"], "status": "ok", "items": len(found), "url": resolved})
         except Exception as e:

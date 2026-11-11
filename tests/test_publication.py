@@ -113,12 +113,17 @@ class PublicationTests(unittest.TestCase):
 
     def test_material_changes_and_stale_choices_are_rejected(self):
         now = datetime.now(timezone.utc)
-        source = {'id': 'r1', 'url': 'https://example.com/a', 'title': '생활비 사연', 'text': '원문',
+        excerpt = '배우자가 생활비를 절반씩 내자고 했다'
+        source = {'id': 'r1', 'url': 'https://example.com/a', 'title': '생활비 사연', 'text': excerpt,
                   'published': (now - timedelta(days=1)).isoformat(), 'date_verified': True}
         research = {'sources': [source]}
         choices = [{'title': f'생활비 선택 {i}', 'angle': '비교 관점', 'root_source_id': 'r1', 'source_ids': ['r1']} for i in range(10)]
         policy = {'title_candidate_count': 10, 'max_age_days': 7, 'source_limit': 4}
-        with patch('economicissue.topics.complete', return_value={'post': {'candidates': choices}}):
+        case = {'root_source_id': 'r1', 'money_event': excerpt, 'excerpt': excerpt,
+                'reader_question': '소득이 다른 부부의 생활비를 어떻게 나눌까?'}
+        with patch('economicissue.topics.complete', side_effect=[
+            {'post': {'cases': [case]}}, {'post': {'candidates': choices}}
+        ]):
             bundle = make_choices(research, policy, '.cache')
         selected, _ = choose(bundle, research, 3, policy)
         self.assertEqual(selected['title'], '생활비 선택 2')
@@ -129,6 +134,16 @@ class PublicationTests(unittest.TestCase):
         self.assertFalse(recent({**source, 'date_verified': False}, 7, now))
         self.assertFalse(recent({**source, 'published': (now - timedelta(days=8)).isoformat()}, 7, now))
         self.assertFalse(recent({**source, 'published': (now + timedelta(days=1)).isoformat()}, 7, now))
+
+    def test_topics_skip_titles_when_only_generic_statistics_are_available(self):
+        source = {'id': 'r1', 'url': 'https://example.com/price', 'title': '올해 김장 비용',
+                  'text': '배추 가격이 하락해 김장 재료비가 줄었다',
+                  'published': datetime.now(timezone.utc).isoformat(), 'date_verified': True}
+        policy = {'title_candidate_count': 10, 'max_age_days': 7, 'source_limit': 4}
+        with patch('economicissue.topics.complete', return_value={'post': {'cases': []}}) as model:
+            bundle = make_choices({'sources': [source]}, policy, '.cache', topic_count=5)
+        self.assertEqual(bundle['candidates'], [])
+        self.assertEqual(model.call_count, 1)
 
     def test_draft_never_generates_without_selection(self):
         with patch('sys.argv', ['economicissue', 'draft']), patch('economicissue.cli.generate') as generate:

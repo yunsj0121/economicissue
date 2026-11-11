@@ -195,7 +195,8 @@ def main():
     parser.add_argument("--brief", default="output/brief.json")
     parser.add_argument("--draft", help="수동 작성 JSON; build에서 필수")
     parser.add_argument("--captures", help="선택한 카드의 캡처 명세 JSON 파일")
-    parser.add_argument("--candidate", type=int, help="사용자가 선택한 제목 후보 번호 1~10")
+    parser.add_argument("--candidate", type=int, help="사용자가 선택한 후보 번호")
+    parser.add_argument("--topic-count", type=int, help="서로 다른 사건을 기준으로 제안할 주제의 최대 개수")
     parser.add_argument("--candidates", default="output/title_candidates.json")
     parser.add_argument("--research", default="output/research.json")
     args = parser.parse_args()
@@ -211,8 +212,11 @@ def main():
         if args.command == "topics" or (args.command == "run" and args.candidate is None):
             prepare(args, policy)
             research = read(args.research)
-            choices = make_choices(research, policy, ".cache")
+            choices = make_choices(research, policy, ".cache", args.topic_count)
             write(args.candidates, choices)
+            if not choices["candidates"]:
+                print("원문에서 구체적인 돈의 선택이나 결과를 확인한 주제 후보가 없습니다")
+                return
             for c in choices["candidates"]:
                 root = next(s for s in research["sources"] if s["id"] == c["root_source_id"])
                 print(f"{c['number']}. {c['title']}\n   {root['published']} · {root['url']}\n   {c['angle']}")

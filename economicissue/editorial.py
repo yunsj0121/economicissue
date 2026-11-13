@@ -13,6 +13,7 @@ DEFAULT_TOPICS = {
 SIGNALS = {
     "생활 상황": ("외벌이", "맞벌이", "직장인", "부부", "부모", "자녀", "은퇴", "가족", "1인가구", "1인 가구"),
     "선택·갈등": ("고민", "갈등", "후회", "부담", "부족", "공개", "지원", "상환", "손절", "포기"),
+    "일상 경험·관점": ("경험", "생각", "이유", "꾸준히", "모았", "모으", "저축", "배당", "은퇴 후", "살아", "실천"),
     "결과·비교": ("평균", "중앙값", "차이", "비교", "손실", "수익", "늘었", "줄었", "달라", "계산"),
 }
 MONEY = re.compile(r"\d[\d,.]*\s*(?:억|만|천)?\s*원|\d[\d,.]*\s*%")
@@ -28,7 +29,7 @@ def assess(title, text="", policy=None):
     if MONEY.search(material):
         signals.append("구체금액·비율")
     weights = policy.get("editorial_weights", {})
-    defaults = {"생활 상황": 2, "선택·갈등": 3, "결과·비교": 2, "구체금액·비율": 2}
+    defaults = {"생활 상황": 2, "선택·갈등": 2, "일상 경험·관점": 2, "결과·비교": 2, "구체금액·비율": 2}
     score = min(len(families), 2) + sum(weights.get(s, defaults[s]) for s in signals)
     return {"score": score, "families": families, "signals": signals,
             "note": "키워드 기반 편집 적합도 추정이며 사실 검증·조회수 예측이 아님"}

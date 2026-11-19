@@ -128,7 +128,7 @@ def prepare(args, policy):
 
 def finish(result, brief, policy, captures):
     post, sources = format_post(result["post"], policy), brief["sources"]
-    validate(post, sources, policy["image_count"], policy)
+    validate(post, sources, policy["image_count"], policy, captures)
     selection = brief.get("selection")
     if selection and (post["title"] != selection["title"] or post["topic_key"] != selection["topic_key"]):
         raise ValueError("선택한 제목·소재가 변경되었습니다")

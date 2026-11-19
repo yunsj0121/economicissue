@@ -170,6 +170,24 @@ def draw_data(path, card, footer):
     return data_box
 
 def capture_source(spec, source, path):
+    # A PDF viewer capture may be supplied by the operator as an original/marked pair.
+    if "raw_png" in spec or "underlined_png" in spec:
+        if spec.get("card") == 1 or not spec.get("rights", "").strip():
+            raise ValueError("보고서 본문 캡처 번호와 이용 근거가 필요합니다")
+        raw = Path(spec.get("raw_png", ""))
+        marked = Path(spec.get("underlined_png", ""))
+        with Image.open(raw) as original, Image.open(marked) as underlined:
+            if (original.format != "PNG" or underlined.format != "PNG"
+                    or original.size != underlined.size or original.width < 300):
+                raise ValueError("같은 크기의 원본 PNG와 밑줄 처리 PNG가 필요합니다")
+            original.verify()
+            underlined.verify()
+        raw_path = path.parent / "raw-captures" / path.name
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(raw, raw_path)
+        shutil.copyfile(marked, path)
+        return
+
     # Screenshots require a concrete usage basis supplied by the operator.
     if not spec.get("rights", "").strip() or not spec.get("selector"):
         raise ValueError("캡처에는 이용 근거와 정확한 CSS selector가 필요합니다")
@@ -336,6 +354,12 @@ def render(post, sources, directory, captures=(), policy=None):
                     with Image.open(directory / filename) as raw:
                         raw.save(panel)
             except Exception as error:
+                source = known[sid]
+                if card.get("visual") == "evidence" and (
+                    source.get("kind") == "report" or
+                    (source.get("kind") == "manual" and source.get("pdf_pages"))
+                ):
+                    raise ValueError(f"보고서 원문 캡처 실패 ({filename}): {error}") from error
                 capture_failures.append({"image": filename, "source_id": sid,
                                          "url": known[sid]["url"], "reason": str(error)})
                 draw_image(directory / filename, "원문 캡처 불가", card["text"],
@@ -345,7 +369,7 @@ def render(post, sources, directory, captures=(), policy=None):
                                "url": known[sid]["url"], "reason": str(error)})
             else:
                 status.append({"image": filename, "type": "capture", "source_id": sid,
-                               "url": known[sid]["url"], "selector": spec["selector"]})
+                               "url": known[sid]["url"], "selector": spec.get("selector", "")})
                 raw_path = directory / "raw-captures" / filename
                 if raw_path.exists():
                     status[-1].update(raw_path=str(raw_path.relative_to(directory)),

@@ -15,7 +15,7 @@ RULES = """한국어 네이버 경제 이슈 글 편집자. 독자는 3040이다
 전개는 자료에 맞게 선택한다. 구체적인 고민에서 시작해 사실과 생활 속 의미, 글쓴이의 판단을 연결한다.
 완성된 한 문장을 한 줄에 쓴다. 문장 내부에는 길이나 의미 단위를 이유로 줄바꿈하지 않는다.
 읽기 어려운 문장은 다듬되 설명과 짧은 반응의 길이를 자연스럽게 섞는다. 문장 사이에는 빈 줄 하나를 둔다.
-문장 끝 마침표(.)는 쓰지 않는다. 소수점·주소의 점은 유지. 자연스러운 ~요/~습니다.
+문장 끝 마침표(.)는 쓰지 않는다. 소수점·주소의 점은 유지. 독백형 ~다체.
 불필요한 인사·반복·분량 채우기 금지.
 분량과 이미지 수는 뒤에 제공하는 제작 설정을 따른다. 소제목은 필요할 때만. 실제 체험을 지어내지 않는다.
 평균/중앙값, 개인/가구, 저축/투자, 기준연도/발표일을 구분한다.
@@ -53,13 +53,13 @@ def writing_rules(policy=None):
     settings = {k: policy[k] for k in ("length", "hashtag_count", "image_count") if policy and k in policy}
     visual_rules = """
 제작 설정의 length 범위를 반드시 지킨다. 글자 수는 본문·해시태그·사이 공백/줄바꿈을 포함하고 제목·출처·이미지 안내는 제외한다.
-구어체 존댓말 ~해요/~예요/~죠와 설명형 ~습니다/~입니다를 자연스럽게 섞는다.
+보고서 기반 글의 배치 순서는 일반 전개 원칙보다 우선한다. 보고서 분석(fact) → 바로 뒤의 동일 출처 원문 캡처(evidence 카드, after=분석 문단 번호) → 내 생각(opinion) 순서다. 모든 보고서 분석과 대응 캡처 뒤에 첫 opinion 문단을 둔다. 사용자가 밝힌 판단·계획·경험을 구체적으로 쓴다.
 해시태그는 hashtags에 #으로 시작하는 서로 다른 관련어로 작성하고 본문에 넣지 않는다.
 도입은 핵심 고민·구체적인 상황·확인된 장면에서 자료에 맞게 선택한다. 익명 사연은 익명 게시물의 주장임을 자연스럽게 밝힌다.
 본문에 '기사에서는', '기사에 따르면', '기사 속', '보도에 따르면', '○○매체가 소개했다/다뤘다' 같은 기사 전달 표현은 쓰지 않는다.
 사람의 상황과 확인된 사실을 바로 설명한다. 매체명·기사 날짜·원문 링크는 본문 밖의 출처 목록에 둔다. 익명 주장과 사실·계산 가정의 구분은 유지한다.
 이미지는 관련 설명 뒤에 분산한다. visual은 evidence/table/chart/explanation 중 역할에 맞게 선택한다.
-evidence는 실제 source.capture_candidates의 capture_id만 사용한다. CSS selector나 이미지 주소를 만들지 않는다. 자동 evidence는 kind=text인 짧은 원문 일부만 선택한다.
+자동 evidence는 source.capture_candidates의 실제 kind=text 후보 ID만 사용한다. 보고서 PDF의 해당 표·문장에 자동 후보가 없으면 evidence 카드의 capture_id는 비우고 작업자가 실제 원문 캡처를 지정하게 한다. CSS selector나 이미지 주소를 만들지 않는다.
 table/chart의 columns, rows는 원문에서 확인되는 값만 쓰고 수치·단위·기간을 그대로 보존한다.
 수치가 없는 비교표는 선택 기준을 비교한다. 가상 계산은 본문에 가정임을 명시하고 실제 통계처럼 표로 만들지 않는다.
 evidence 이외 capture_id는 빈 문자열, table/chart 이외 columns와 rows는 빈 배열로 둔다.
@@ -102,7 +102,7 @@ SCHEMA = obj({
 })
 
 
-def validate(post, sources, image_count, policy=None):
+def validate(post, sources, image_count, policy=None, captures=()):
     if not post.get("ready"):
         raise ValueError("자료 부족: " + post.get("reason", ""))
     ids = {s["id"] for s in sources}
@@ -132,14 +132,16 @@ def validate(post, sources, image_count, policy=None):
     validate_narrative(post, ids)
     if len(post["cards"]) != image_count - 1:
         raise ValueError("이미지는 썸네일 포함 지정한 개수여야 함")
-    for card in post["cards"]:
+    for index, card in enumerate(post["cards"], 2):
         visual = card.get("visual", "explanation")
         if visual not in {"evidence", "table", "chart", "explanation"}:
             raise ValueError("지원하지 않는 이미지 종류")
         if visual == "evidence":
             candidates = [c for source in sources if source["id"] in card["source_ids"]
                           for c in source.get("capture_candidates", [])]
-            if not any(c["id"] == card.get("capture_id") for c in candidates):
+            supplied = any(spec.get("card") == index and spec.get("source_id") in card["source_ids"]
+                           for spec in captures)
+            if not supplied and not any(c["id"] == card.get("capture_id") for c in candidates):
                 raise ValueError("실제로 확인한 캡처 영역이 아닙니다")
         if visual in {"table", "chart"}:
             import re
@@ -162,6 +164,7 @@ def validate(post, sources, image_count, policy=None):
             raise ValueError("카드 삽입 위치 오류")
         if not card["text"].strip() or len(card["text"]) > 140 or len(card["title"]) > 24:
             raise ValueError("카드 문구 길이 오류")
+    validate_report_order(post, sources, captures)
     if not post["thumbnail"].strip() or len(post["thumbnail"].splitlines()) > 3 or any(len(s) > 14 for s in post["thumbnail"].splitlines()):
         raise ValueError("썸네일 문구 길이 오류")
 
@@ -170,8 +173,37 @@ def validate(post, sources, image_count, policy=None):
         check_publication(post, policy)
 
 
+def validate_report_order(post, sources, captures):
+    report_ids = {s["id"] for s in sources if s.get("kind") == "report"
+                  or (s.get("kind") == "manual" and s.get("pdf_pages"))}
+    analysis = [(number, report_ids.intersection(p["source_ids"]))
+                for number, p in enumerate(post["paragraphs"], 1)
+                if p["kind"] == "fact" and report_ids.intersection(p["source_ids"])]
+    if not analysis:
+        return
+
+    first_opinion = next((n for n, p in enumerate(post["paragraphs"], 1)
+                          if p["kind"] == "opinion"), None)
+    if first_opinion is None or first_opinion <= analysis[-1][0]:
+        raise ValueError("보고서 분석과 원문 캡처를 모두 배치한 뒤 내 생각을 작성하세요")
+
+    explicit_sources = {spec["card"]: spec["source_id"] for spec in captures
+                        if "card" in spec and "source_id" in spec}
+    candidate_sources = {(s["id"], c["id"]) for s in sources
+                         for c in s.get("capture_candidates", [])}
+    for number, source_ids in analysis:
+        if not any(
+            card.get("visual") == "evidence" and card["after"] == number
+            and any((explicit_sources.get(index) == sid if index in explicit_sources
+                     else (sid, card.get("capture_id")) in candidate_sources)
+                    for sid in source_ids.intersection(card["source_ids"]))
+            for index, card in enumerate(post["cards"], 2)
+        ):
+            raise ValueError(f"보고서 분석 {number}번 문단 바로 뒤에 같은 출처의 원문 캡처를 넣으세요")
+
+
 def generate(sources, policy, cache, selection=None):
-    fields = ("id", "url", "title", "published", "kind", "text", "date_verified", "attachment_note", "editorial", "capture_candidates", "browser_verified")
+    fields = ("id", "url", "title", "published", "kind", "text", "date_verified", "attachment_note", "editorial", "capture_candidates", "browser_verified", "pdf_pages")
     # Retrieval timestamps and storage hashes do not change evidence or writing.
     stable_sources = [{k: s[k] for k in fields if k in s} for s in sources]
     payload = {"sources": stable_sources, "card_count": policy["image_count"] - 1}

@@ -13,7 +13,7 @@ from .voice import narrative_review
 from .editorial import assess, SIGNALS
 from .render import render
 from .formatting import format_post
-from .delivery import write_delivery, write_preview
+from .delivery import delivery_check, write_delivery, write_preview
 from .quality import check_publication
 from .topics import make_choices, choose
 
@@ -189,7 +189,7 @@ def finish(result, brief, policy, captures):
 
 def main():
     parser = argparse.ArgumentParser(description="이슈 탐색 → 원고 → 이미지 패키지")
-    parser.add_argument("command", choices=["prepare", "topics", "draft", "build", "run"])
+    parser.add_argument("command", choices=["prepare", "topics", "draft", "build", "run", "delivery-check"])
     parser.add_argument("--policy", default="policy.json")
     parser.add_argument("--url", action="append", default=[], help="자동 탐색 대신 사용할 실제 원문; 반복 가능")
     parser.add_argument("--brief", default="output/brief.json")
@@ -199,8 +199,21 @@ def main():
     parser.add_argument("--topic-count", type=int, help="서로 다른 사건을 기준으로 제안할 주제의 최대 개수")
     parser.add_argument("--candidates", default="output/title_candidates.json")
     parser.add_argument("--research", default="output/research.json")
+    parser.add_argument("--bundle", help="delivery-check에서 검사할 결과 폴더")
+    parser.add_argument("--delivery-observations", help="실제 첨부 도구의 결과를 옮긴 JSON 파일")
     args = parser.parse_args()
     try:
+        if args.command == "delivery-check":
+            if not args.bundle:
+                raise ValueError("delivery-check에는 --bundle이 필요합니다")
+            observations = read(args.delivery_observations) if args.delivery_observations else None
+            if args.delivery_observations and observations is None:
+                raise ValueError("첨부 관찰 기록 파일을 읽을 수 없습니다")
+            result = delivery_check(args.bundle, observations)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if any(image["file_status"] == "invalid" for image in result["images"]):
+                raise SystemExit(1)
+            return
         policy = read(args.policy)
         if not policy or policy["image_count"] not in range(3, 7):
             raise ValueError("policy.json과 이미지 개수(3~6)를 확인하세요")

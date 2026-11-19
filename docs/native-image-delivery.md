@@ -38,3 +38,27 @@ for (const result of orderedActualImageGenResults) {
 이미지 생성·캡처 성공, 이미지 검수, 사용자 첨부, 모바일 묶음 저장은 서로 다른 단계다. 실제 네이티브 이미지 묶음과 일괄 저장이 확인되지 않으면 pending 상태를 유지한다. 사용자가 여러 장을 개별 저장해야 한다고 알려주면 미완료다.
 
 마크다운 이미지 나열, HTML, ZIP, 합본, 개별 PNG 링크로 자동 대체하지 않는다. 해당 첨부 기능이 확인되지 않으면 그 부분을 미확인으로 보고한다. 사용자가 따로 요청한 보조 내보내기만 `write_image_gallery`로 만들 수 있다.
+
+### 답변 직전 검사
+
+1. 새 제작과 재전달 모두 `economicissue delivery-check --bundle <결과 폴더>`를 실행한다. 원고에 필요한 수와 순서, 역할, PNG 디코딩, 파일 해시를 확인한다. `file_status=invalid`인 파일은 표시용 경로나 첨부 입력으로도 넘기지 않는다. 기존에 검증된 후보를 보존하고 실패 파일만 복구한 후 재검사한다.
+2. 현재 세션의 도구 설명을 확인한다. 제작 이미지는 실제 image_gen 결과를 반환한다. 원문 PNG는 해당 세션에서 사용자 메시지에 기존 PNG를 첨부하고 결과를 반환하는 도구가 있을 때만 사용한다. 도구가 없으면 `unsupported`로 기록한다. 도구 미리보기 및 파일 업로드 서비스는 채팅의 네이티브 묶음 첨부와 별개다.
+3. 실제 호출 뒤 아래 형식으로 관찰 기록을 작성하고 `economicissue delivery-check --bundle <결과 폴더> --delivery-observations <기록.json>`을 실행한다. `tool`은 실제 실행한 도구, `result_ref`는 성공 결과에 실제로 포함된 식별자다. 사용자 향 이미지 반환이 확인된 제작 이미지에는 `image_gen_result_return`, 원문에는 `native_png_attachment`를 쓴다. `sha256`은 이번에 검수하고 처리한 전달 목록 항목의 해시다. 생성 성공만 반환하거나 이미지 출력 함수가 첨부 결과를 반환하지 않는 환경에서는 첨부 성공 항목을 만들지 않는다. 이 기록은 에이전트의 관찰이며 CLI는 채팅 서비스에 직접 조회하지 않는다.
+
+```json
+{
+  "02_body.png": {"content_reviewed": true, "attachment": "unsupported"},
+  "03_body.png": {
+    "content_reviewed": true,
+    "attachment": "success",
+    "receipt": {
+      "method": "native_png_attachment",
+      "sha256": "<전달 목록의 실제 해시>",
+      "tool": "<실제 첨부 도구>",
+      "result_ref": "<실제 성공 결과 식별자>"
+    }
+  }
+}
+```
+
+4. 최종 답변은 검사 결과의 `reported_attached`와 `missing_attachments`를 기준으로 작성한다. 일부 성공이면 “3장 중 2장 첨부”와 누락 파일 및 사유를 적는다. `capture_unavailable`은 원문 캡처 실패이며 생성 대체 대상에서 제외한다. 사용자 화면의 표시와 일괄 저장은 모바일에서 별도로 확인한 경우만 확인됐다고 안내한다. 사용자가 별도로 허용한 대체 방식은 그 방식의 이름으로 안내한다.

@@ -2,11 +2,114 @@
 import html
 import hashlib
 import json
+from io import BytesIO
 from pathlib import Path
+
+
+from PIL import Image
+
+
+def png_digest(path):
+    try:
+        data = path.read_bytes()
+        with Image.open(BytesIO(data), formats=["PNG"]) as image:
+            image.verify()
+        with Image.open(BytesIO(data), formats=["PNG"]) as image:
+            image.load()
+    except FileNotFoundError as error:
+        raise ValueError(f"{path.name}: PNG 파일 누락") from error
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as error:
+        raise ValueError(f"{path.name}: PNG를 읽을 수 없습니다 ({error})") from error
+    return hashlib.sha256(data).hexdigest()
+
+
+def expected_order(count):
+    return ["01_thumbnail.png"] + [f"{i:02d}_body.png" for i in range(2, count + 1)]
+
+
+def check_order(files, count):
+    expected = expected_order(count)
+    if files != expected:
+        raise ValueError(f"이미지 수 또는 순서 불일치: 필요 {expected}, 실제 {files}")
+
+
+def delivery_check(directory, observations=None):
+    """Recheck the bundle and summarize agent-reported tool receipts without changing the plan."""
+    directory = Path(directory)
+    plan = json.loads((directory / "delivery.json").read_text(encoding="utf-8"))
+    draft_path = directory / "draft.json"
+    count = plan.get("expected_image_count", len(plan["images"]))
+    if draft_path.exists():
+        draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        count = 1 + len(draft["cards"])
+    check_order(plan["order"], count)
+    check_order([item["path"] for item in plan["images"]], count)
+    observations = {} if observations is None else observations
+    if not isinstance(observations, dict) or observations.keys() - set(plan["order"]):
+        raise ValueError("첨부 관찰 기록의 파일명이 전달 목록과 일치하지 않습니다")
+
+    review_path = directory / "image_review.json"
+    reviews = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else []
+    reviewed = {item["image"]: item for item in reviews}
+    results = []
+    for index, item in enumerate(plan["images"]):
+        name = item["path"]
+        role = "thumbnail" if index == 0 else "body"
+        details = reviewed.get(name, {})
+        if details.get("type") == "capture_failed":
+            item = {**item, "asset_type": "capture_unavailable",
+                    "reason": details.get("reason", "원문 캡처 실패")}
+        elif (details.get("type") == "capture") != (item["asset_type"] == "source_capture"):
+            raise ValueError(f"{name}: 캡처 검토 기록과 전달 목록의 유형 불일치")
+        if item["role"] != role or item["asset_type"] not in {
+            "generation_input", "source_capture", "capture_unavailable"
+        } or (index == 0 and item["asset_type"] != "generation_input"):
+            raise ValueError(f"{name}: 이미지 역할 또는 유형 불일치")
+        row = {"file": name, "role": role, "asset_type": item["asset_type"],
+               "file_status": "validated", "content_review": "unconfirmed",
+               "attachment": "unconfirmed"}
+        results.append(row)
+        try:
+            if png_digest(directory / name) != item["sha256"]:
+                raise ValueError(f"{name}: 전달 목록에 기록된 해시와 다릅니다")
+        except ValueError as error:
+            row.update(file_status="invalid", reason=str(error))
+            continue
+        if item["asset_type"] == "capture_unavailable":
+            row.update(file_status="capture_unavailable", reason=item["reason"])
+            continue
+
+        observation = observations.get(name, {})
+        if not isinstance(observation, dict):
+            raise ValueError(f"{name}: 첨부 관찰 기록이 객체여야 합니다")
+        if observation.get("content_reviewed") is True:
+            row["content_review"] = "confirmed"
+        if observation.get("attachment") in {"unsupported", "failed"}:
+            row["attachment"] = observation["attachment"]
+        receipt = observation.get("receipt", {})
+        method = {"generation_input": "image_gen_result_return",
+                  "source_capture": "native_png_attachment"}[item["asset_type"]]
+        if (row["content_review"] == "confirmed"
+                and observation.get("attachment") == "success"
+                and isinstance(receipt, dict)
+                and receipt.get("method") == method and receipt.get("sha256") == item["sha256"]
+                and all(isinstance(receipt.get(key), str) and receipt[key].strip()
+                        for key in ("tool", "result_ref"))):
+            row["attachment"] = "reported_success"
+        elif observation.get("attachment") == "success":
+            row["reason"] = "내용 검수 또는 첨부 도구의 성공 기록이 확인되지 않았습니다"
+
+    missing = [row["file"] for row in results if row["attachment"] != "reported_success"]
+    return {"expected": count, "reported_attached": count - len(missing),
+            "missing_attachments": missing, "images": results,
+            "attachment_status": "pending" if missing else "all_reported_attached",
+            "mobile_display": "unverified", "mobile_bulk_save": "unverified"}
+
 
 
 def write_delivery(directory, title, files, post=None):
     directory = Path(directory)
+    check_order(files, 1 + len(post["cards"]) if post else len(files))
     review_path = directory / "image_review.json"
     reviews = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else []
     reviewed = {item["image"]: item for item in reviews}
@@ -15,14 +118,22 @@ def write_delivery(directory, title, files, post=None):
         path = directory / name
         details = reviewed.get(name, {})
         capture = details.get("type") == "capture"
+        failed_capture = details.get("type") == "capture_failed"
+        if i == 0 and (capture or failed_capture):
+            raise ValueError(f"{name}: 썸네일은 생성 입력이어야 합니다")
+        asset_type = "source_capture" if capture else "generation_input"
+        if failed_capture:
+            asset_type = "capture_unavailable"
         item = {"path": name, "role": "thumbnail" if i == 0 else "body", "alt_text": None,
-                "asset_type": "source_capture" if capture else "generation_input",
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                "asset_type": asset_type, "sha256": png_digest(path)}
         if capture:
             item.update({k: details[k] for k in ("source_id", "url", "selector", "raw_path", "raw_sha256")
                          if k in details})
             item["delivery_method"] = "original_png_native_attachment"
             item["image_generation_allowed"] = False
+        elif failed_capture:
+            item.update(reason=details.get("reason", "원문 캡처 실패"),
+                        url=details.get("url"), image_generation_allowed=False)
         else:
             item["delivery_method"] = "original_image_gen_result"
             copy = {"title": title}
@@ -48,7 +159,7 @@ def write_delivery(directory, title, files, post=None):
         groups.append({"id": "source_captures", "image_indices": captures,
                        "delivery_protocol": "original_png_native_multi_image_attachment"})
     # This is a request for agent-side tool execution, never a native attachment receipt.
-    delivery = {"version": 2, "presentation": "native_multi_image_gallery",
+    delivery = {"version": 3, "expected_image_count": len(files), "presentation": "native_multi_image_gallery",
                 "delivery_protocol": "image_gen_results_and_original_capture_attachments",
                 "delivery_status": "pending_generation_and_native_attachment" if jobs else "pending_native_attachment",
                 "required_generated_image_results": len(jobs),
@@ -62,7 +173,9 @@ def write_delivery(directory, title, files, post=None):
                 "final_only": True, "order": files,
                 "images": images,
                 "alt_text_author": "user", "post": "post.txt", "copyable_post": "copyable_post.md",
-                "instructions": ["Run every generation job with the actual image_gen tool; PNG layouts are inputs only",
+                "instructions": ["Run economicissue delivery-check --bundle <directory> before using any paths",
+                                 "After tool execution, rerun delivery-check with actual tool observations; use its per-file status",
+                                 "Run every generation job with the actual image_gen tool; PNG layouts are inputs only",
                                  "Resolve input_path against the final bundle directory; inspect the reference before editing",
                                  "Preserve the original returned tool objects in the current session",
                                  "Check final Korean copy, numbers, units and thumbnail aspect ratio",

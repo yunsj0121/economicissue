@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .sources import public_url
 from .formatting import visual_text
+from .images import square_image
 
 
 def font_path():
@@ -397,7 +398,18 @@ def render(post, sources, directory, captures=(), policy=None):
     elif not thumb:
         status.insert(0, {"image": "01_thumbnail.png", "type": "text_layout"})
     panel.unlink(missing_ok=True)
-    import json, shutil
+    # Preserve both browser originals and unmodified annotated captures separately.
+    # Normalize only delivery copies before their hashes are recorded.
+    for item in status:
+        path = directory / item["image"]
+        if item["type"] == "capture":
+            marked = directory / "marked-captures" / path.name
+            marked.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, marked)
+            item.update(marked_path=str(marked.relative_to(directory)),
+                        marked_sha256=hashlib.sha256(marked.read_bytes()).hexdigest())
+        square_image(path)
+    import json
     shutil.rmtree(directory / ".capture-cache", ignore_errors=True)
     (directory / "image_review.json").write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "capture_failures.json").write_text(json.dumps(capture_failures, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -127,7 +127,7 @@ def write_delivery(directory, title, files, post=None):
         item = {"path": name, "role": "thumbnail" if i == 0 else "body", "alt_text": None,
                 "asset_type": asset_type, "sha256": png_digest(path)}
         if capture:
-            item.update({k: details[k] for k in ("source_id", "url", "selector", "raw_path", "raw_sha256")
+            item.update({k: details[k] for k in ("source_id", "url", "selector", "raw_path", "raw_sha256", "marked_path", "marked_sha256")
                          if k in details})
             item["delivery_method"] = "original_png_native_attachment"
             item["image_generation_allowed"] = False
@@ -142,7 +142,7 @@ def write_delivery(directory, title, files, post=None):
                 copy = ({"thumbnail": post["thumbnail"]} if i == 0 else
                         {key: card[key] for key in ("title", "text", "columns", "rows") if key in card})
             prompt = ("작업자가 만든 첨부 레이아웃을 참고해 게시용 이미지 한 장을 생성하세요. "
-                      "아래 확정 문구·숫자·단위·조건을 정확히 유지하세요. 썸네일은 1:1이며 글자를 크게 배치하세요. "
+                      "아래 확정 문구·숫자·단위·조건을 정확히 유지하세요. 모든 이미지는 1:1이며 썸네일 글자를 크게 배치하세요. "
                       "자료에 없는 숫자나 원문 화면을 만들지 마세요. 원문 캡처를 흉내 내지 마세요.\n"
                       + json.dumps(copy, ensure_ascii=False))
             jobs.append({"image_index": i + 1, "role": item["role"], "input_path": name, "input_sha256": item["sha256"],

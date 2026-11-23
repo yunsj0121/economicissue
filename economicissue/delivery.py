@@ -169,7 +169,7 @@ def write_delivery(directory, title, files, post=None):
                 "attach_generated_results_directly": True,
                 "run_image_generation_in_one_response": True,
                 "tool_preview_is_delivery": False, "manifest_is_delivery_receipt": False,
-                "forbid_markdown_image_links": True, "forbid_automatic_zip_fallback": True,
+                "forbid_markdown_image_links": False, "forbid_automatic_zip_fallback": True,
                 "final_only": True, "order": files,
                 "images": images,
                 "alt_text_author": "user", "post": "post.txt", "copyable_post": "copyable_post.md",
@@ -183,7 +183,8 @@ def write_delivery(directory, title, files, post=None):
                                  "Retry only failed jobs and reuse successful original result objects",
                                  "Attach source captures as unchanged PNGs in a separate native image group; never regenerate them",
                                  "Do not wrap view_image data URLs or file paths as generated image results",
-                                 "Do not substitute Markdown, ZIP, HTML or preview output for native attachment",
+                                 "When native capture attachment is unavailable, show validated images inline using the supported chat method and label it accurately",
+                                 "Do not treat Markdown display, ZIP, HTML or preview as proof of native attachment",
                                  "Alt text is supplied separately by the user",
                                  "Keep pending status unless actual native attachments and bulk save have been verified"]}
     (directory / "delivery.json").write_text(json.dumps(delivery, ensure_ascii=False, indent=2), encoding="utf-8")

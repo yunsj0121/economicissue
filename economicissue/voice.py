@@ -1,6 +1,19 @@
 """Narrative guidance and traceable editorial notes, not an AI-authorship score."""
+import re
 
 ENDING_MODES = ("선택 이유", "남은 고민", "구체적인 질문", "가벼운 여운")
+
+
+def validate_prose_style(post, policy):
+    """Flag explicit style regressions; quoted source text is retained."""
+    if policy.get("writing_style") != "reflective_da":
+        return
+    for paragraph in post["paragraphs"]:
+        prose = re.sub(r'''“[^”]*”|‘[^’]*’|"[^"\n]*"|'[^'\n]*\u0027''', "", paragraph["text"])
+        if re.search(r"블라인드\s*에서는|(?:한\s+)?익명\s*(?:투자자|직장인|작성자)(?:는|은)|게시글\s*작성자(?:는|가)", prose):
+            raise ValueError("출처·인물 소개 표현을 빼고 상황과 돈 문제부터 시작하세요")
+        if re.search(r"(?:습니다|습니까|입니다|입니까|어요|아요|해요|돼요|예요|이에요|네요|죠|까요|나요|거든요|데요|군요)[?!.。．]?\s*$", prose, re.MULTILINE):
+            raise ValueError("본문은 존댓말 대신 ~다체와 혼자 고민하는 독백으로 수정하세요")
 
 VOICE_RULES = """원고의 목소리와 생각 전개:
 쓰기 전에 narrative.focus에 이 이야기에서 가장 마음에 걸린 지점을 한 문장으로 정한다.

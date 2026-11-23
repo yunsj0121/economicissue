@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from economicissue.cli import finish
-from economicissue.voice import narrative_review
+from economicissue.voice import narrative_review, validate_prose_style
 from economicissue.writer import SCHEMA, validate
 from test_pipeline import fixture
 from test_publication import publication_fixture
@@ -25,6 +25,15 @@ def plan():
 
 
 class VoiceTests(unittest.TestCase):
+    def test_style_checks_reject_polite_prose_but_preserve_quotations(self):
+        policy = {"writing_style": "reflective_da"}
+        post = {"paragraphs": [{"text": "그는 ‘생활이 어려워요’라고 말했다\n\n나도 고민하게 된다"}]}
+        validate_prose_style(post, policy)
+        for text in ("생활비가 늘었어요", "블라인드에서는 부담이 늘었다고 한다"):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                validate_prose_style({"paragraphs": [{"text": text}]}, policy)
+        validate_prose_style({"paragraphs": [{"text": "생활비가 늘었어요"}]}, {})
+
     def test_new_schema_requires_plan_but_legacy_draft_still_builds(self):
         self.assertIn("narrative", SCHEMA["required"])
         post, sources = fixture()

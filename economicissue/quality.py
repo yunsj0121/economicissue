@@ -1,5 +1,6 @@
 """Deterministic publication checks; no paid repair calls or padding."""
 import re
+from .voice import validate_prose_style
 
 
 def publication_text(post):
@@ -9,6 +10,7 @@ def publication_text(post):
 
 
 def check_publication(post, policy):
+    validate_prose_style(post, policy)
     tags = post.get("hashtags", [])
     count = policy.get("hashtag_count")
     if count is not None and (len(tags) != count or len(set(tags)) != count or
